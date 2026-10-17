@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+state/
+.saga-state/
+.demo-state/
+.local/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
