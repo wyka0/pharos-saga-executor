@@ -23,6 +23,7 @@ Adapter: **simulated only** (no wallet, no RPC, no network, no real funds)
 | `npm run demo:manual` | 0 | `PASS`; compensation failed, final state `MANUAL_RECOVERY_REQUIRED` |
 | `npm run demo:unknown` | 0 | `PASS`; unknown SWAP outcome, no retry, final state `MANUAL_RECOVERY_REQUIRED` |
 | `npm run verify` | 0 | build + 61 tests + static safety gate, all passed; 38 build files emitted |
+| `npx --yes skills@1.7.2 add . --list` | 0 | local path validated; **1 skill found**: `pharos-saga-executor` (list only, not installed) |
 | `npm run cli -- list ...` | 0 | one persisted simulated saga listed (see section 5) |
 
 The final `npm run verify` summary was:

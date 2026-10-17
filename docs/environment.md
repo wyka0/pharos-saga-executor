@@ -88,6 +88,29 @@ The `skills` CLI documentation also confirms local-path installation:
 npx skills add ./my-local-skills
 ```
 
+### Packaging validation (observed)
+
+The skill package was validated without installing it globally:
+
+```powershell
+npx --yes skills@1.7.2 add . --list
+```
+
+Observed:
+
+```text
+◇ Source: C:\pharos-saga-executor
+◇ Local path validated
+◇ Found 1 skill
+◇ Available Skills
+    pharos-saga-executor
+      Run a resumable, receipt-verified APPROVE -> SWAP -> DEPOSIT workflow ...
+```
+
+This confirms that the `SKILL.md` front matter and repository layout are
+recognised by the same `skills` CLI the Pharos Skill Engine page documents. The
+command only listed the skill; no global installation was performed.
+
 ### What the environment does **not** support (observed gap)
 
 - There is no documented or visible **custom skill upload/registration** flow in
