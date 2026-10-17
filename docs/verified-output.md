@@ -17,7 +17,7 @@ Adapter: **simulated only** (no wallet, no RPC, no network, no real funds)
 | --- | ---: | --- |
 | `npm install --no-fund --no-audit` | 0 | added 6 packages (TypeScript, tsx, @types/node and transitive dev tooling) |
 | `npm run typecheck` | 0 | `tsc -p tsconfig.json --noEmit`, no diagnostics |
-| `npm test` | 0 | **61 tests, 61 pass, 0 fail**; 0 suites; 0 skipped; ~5.4 s |
+| `npm test` | 0 | **61 tests, 61 pass, 0 fail**; 0 suites; 0 skipped; ~4.9 s |
 | `npm run demo:success` | 0 | `PASS`; final state `COMPLETED`; all three simulated receipts verified |
 | `npm run demo:failure` | 0 | `PASS`; transient retries at 75 ms and 150 ms, permanent DEPOSIT failure, simulated unwind succeeded, final state `FAILED` |
 | `npm run demo:manual` | 0 | `PASS`; compensation failed, final state `MANUAL_RECOVERY_REQUIRED` |
@@ -42,7 +42,7 @@ The final `npm run verify` summary was:
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 5298.5622
+ℹ duration_ms 4914.1975
 
 > pharos-saga-executor@0.1.0 check:safety
 > node scripts/check-safety.mjs
