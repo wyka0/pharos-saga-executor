@@ -131,7 +131,7 @@ The original simulated-adapter demos remain unchanged and passing.
 ## 5. Test results
 
 ```text
-npm test       -> 80 tests, 80 pass, 0 fail, 0 skipped (~43 s)
+npm test       -> 80 tests, 80 pass, 0 fail, 0 skipped (~31 s)
 npm run verify -> build + 80 tests + safety gate (see exact run below)
 ```
 

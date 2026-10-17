@@ -38,7 +38,8 @@ but currently **blocked** by missing verified token/protocol prerequisites.
 
 > **Default path: SIMULATION ONLY.** No wallet, private key, RPC endpoint, signature,
 > broadcast or confirmation is used by the demos. Simulated receipts are branded
-> `simulated: true` and use `sim_*` references.
+> `simulated: true` and use `sim_*` references. **No live on-chain saga has
+> executed.**
 >
 > **Testnet path: Atlantic only (chainId 688689).** It requires an explicit plan
 > hash approval plus a CLI confirmation gate. It rejects any other chain,

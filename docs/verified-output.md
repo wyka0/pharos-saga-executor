@@ -7,8 +7,9 @@ Adapter: **simulated** (iteration 1) plus a **gated Atlantic testnet adapter** (
 
 > ## Classification
 >
-> **Sections 1–8 are iteration 1:** deterministic simulation. No transaction hash,
-> block number or explorer link exists there; no real transaction was sent.
+> **Sections 1-8 are iteration 1:** deterministic simulation. No transaction hash,
+> block number or explorer link exists there; no real transaction was sent and
+> **no live on-chain saga has executed**.
 >
 > **Section 9 is iteration 2:** live **read-only** Atlantic testnet checks
 > (chain id, balances, token metadata, plan generation). No transaction was
@@ -571,7 +572,7 @@ Recorded result:
 ℹ tests 80
 ℹ pass 80
 ℹ fail 0
-ℹ duration_ms 42889.7821
+ℹ duration_ms 31579.9339
 PASS  25 simulation files are free of wallet/RPC/network code
 PASS  10 testnet files are isolated from mainnet and contain no key literals
 PASS  only viem is declared as a runtime dependency

@@ -40,6 +40,7 @@ const required = [
   'docs/verified-output.md',
   'docs/testnet-readiness.md',
   'docs/testnet-results.md',
+  'docs/reviewer-guide.md',
   'package.json',
   'package-lock.json',
   '.gitignore',

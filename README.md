@@ -9,7 +9,8 @@ as an installable agent skill for the Pharos Agent Arena task
 >
 > **The default adapter is still simulation-only.** No wallet is used by the demo
 > path, no private key exists in this repository, and **no on-chain transaction was
-> sent or confirmed** by the simulations. Every simulated receipt is branded
+> sent or confirmed** by the simulations. **No live on-chain saga has executed.**
+> Every simulated receipt is branded
 > `simulated: true`, uses a `sim_*` reference, and has no transaction hash or
 > explorer link.
 >
@@ -33,6 +34,7 @@ as an installable agent skill for the Pharos Agent Arena task
 ## Contents
 
 - [Why this design](#why-this-design)
+- [Reviewer quick path](#reviewer-quick-path)
 - [Rubric coverage](#rubric-coverage)
 - [Quick start](#quick-start)
 - [Example 1: successful saga](#example-1-successful-saga)
@@ -50,6 +52,26 @@ as an installable agent skill for the Pharos Agent Arena task
 - [License](#license)
 
 ---
+
+## Reviewer quick path
+
+For the Task 5 submission review, run:
+
+```powershell
+npm install
+npm run verify
+npm run demo:success
+npm run demo:failure
+npm run demo:manual
+npm run demo:unknown
+```
+
+Expected: **80 tests pass**, then four simulation demos ending in `COMPLETED`,
+`FAILED` (compensation success), `MANUAL_RECOVERY_REQUIRED` (compensation
+failure), and `MANUAL_RECOVERY_REQUIRED` (unknown outcome).
+
+The full reviewer checklist, expected states, audit markers, and submission
+blockers are in [`docs/reviewer-guide.md`](docs/reviewer-guide.md).
 
 ## Why this design
 
