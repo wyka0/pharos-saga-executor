@@ -297,9 +297,18 @@ additional guarantees:
 8. **Preflight** — token metadata, balance, current allowance, gas estimate and
    max fee are read before the intent is written.
 
-At the time of writing, all live capabilities are blocked: the wallet has zero
-test ERC-20s and no official Atlantic router/vault exists. The adapter reports
-that rather than targeting a random contract.
+At the time of writing, all live capabilities of this adapter were blocked:
+the wallet had zero test ERC-20s and no official Atlantic router/vault exists.
+The adapter reports that rather than targeting a random contract. The wallet
+was later externally funded with 20 of the official testnet USDC (still never
+used as a saga target), and a **separate test-only workflow** (the deployed
+`TestOnly*` mocks plus the gated deploy and saga runners) has since executed
+on Atlantic - five confirmed deployment transactions and a five-transaction
+saga, recorded in
+[`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution) -
+while this adapter path stays blocked: there is still no officially documented
+Atlantic router/vault. `TestOnlyUSDC`/`TestOnlyReceiptToken` (tUSDC/tSAGA) are
+not the official USDC, and the official USDC address was never targeted.
 
 ## 10. CLI and API
 
@@ -313,12 +322,23 @@ that rather than targeting a random contract.
 - Testnet commands require `--env-file`; only variable names are documented.
   Readiness/planning accept `--address` and do not read the signing key.
 - `testnet:run` requires both the exact plan hash and
-  `--confirm-atlantic-testnet`; it has never been invoked in this work.
+  `--confirm-atlantic-testnet`; it has never been invoked in this work. The
+  executed test-only Atlantic workflow uses the separate `testnet:deploy` and
+  `testnet:saga` runners instead - see
+  [`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).
 
 ## 11. Known limitations
 
-- No live testnet transaction was executed. APPROVE/SWAP/DEPOSIT are blocked by
-  zero test token balance and the absence of verified Atlantic protocols.
+- At the time of writing, no live testnet transaction had been executed, and
+  APPROVE/SWAP/DEPOSIT were blocked by the then-zero test token balance and the
+  absence of verified Atlantic protocols. Since then the separate
+  **test-only workflow** (mock contracts plus the gated deploy and saga
+  runners) has executed on Atlantic - five confirmed deployment transactions
+  and a five-transaction saga, recorded in
+  [`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).
+  The **official-protocol adapter path remains blocked**: there is still no
+  officially documented Atlantic router/vault; the mocks are test-only
+  (tUSDC/tSAGA are not the official USDC, which was never targeted).
 - The simulated ledger and the testnet journal are single-process; concurrent
   multi-process writers are not supported.
 - Compensation is attempted once and is not automatically retried.

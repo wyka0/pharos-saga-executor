@@ -9,6 +9,28 @@ Project: `C:\pharos-saga-executor`
 > No private key, seed phrase, keystore password or session token is printed,
 > logged or stored in this repository.
 
+> ## Update (2026-10-18): execution completed after this snapshot
+>
+> This page is the **2026-10-17 readiness snapshot**; statements below such as
+> "no deployment was done" or "no transaction" describe that date and are kept
+> as history. Under separate explicit approval later on 2026-10-17:
+>
+> - the four `TestOnly*` mock contracts and the minter wiring were deployed to
+>   **Pharos Atlantic Testnet, chain ID 688689** - five transactions, all
+>   confirmed; and
+> - the approved saga plan
+>   `8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f` was
+>   executed against them - **all five transactions confirmed**.
+>
+> This was a testnet run using **test-only contracts and test tokens** - not a
+> mainnet deployment and not a production protocol execution. Transaction
+> hashes, receipts, final postconditions and gas totals:
+> [`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).
+> Saga tooling details: [`testnet-saga-tooling.md`](testnet-saga-tooling.md).
+> The official-protocol path described in sections 7-10 remains blocked (there
+> is still no officially documented Atlantic router/vault); the executed saga
+> uses the separately deployed test-only contracts instead.
+
 ## 1. Baseline before the extension
 
 The pre-existing project was verified first:
@@ -170,7 +192,8 @@ protocol target.
 
 The only documented way to obtain a DEX/vault is to deploy your own example
 contracts (Foundry/Hardhat tutorials). That is a new deployment and was not
-authorized, so it was not done.
+authorized at the time, so it was not done *(a separate test-only mock
+deployment was later approved and executed - see the Update at the top)*.
 
 ## 8. Capability matrix
 
@@ -183,6 +206,10 @@ authorized, so it was not done.
 
 The adapter refuses to approve an arbitrary address, to target a random contract,
 or to invent calldata. Those refusals are tested offline.
+
+*(Snapshot note: this matrix describes the official-protocol path and remains
+accurate today; the later test-only saga used mock contracts and is not a
+protocol target - see the Update at the top.)*
 
 ## 9. Initial readiness output (pre-funding)
 
@@ -250,7 +277,7 @@ A second read-only pass after the funding transfer confirmed:
 | USDC total supply | `100108237887829` raw |
 | USDC wallet balance | `20000000` raw = **20 USDC** |
 | Funding receipt | **success**, block `31543356` |
-| Transactions signed/broadcast by this project | **0** |
+| Transactions signed/broadcast by this project | **0** *(at this snapshot; superseded - see the Update at the top)* |
 
 ## 10. What must be true before a live test
 
@@ -262,7 +289,8 @@ A second read-only pass after the funding transfer confirmed:
    in the official docs today.
 3. Alternatively, **explicitly authorize deploying test-only contracts** (a
    mock swap and mock vault, or a token + DEX + vault set) in a separate,
-   separately approved task. No deployment was done.
+   separately approved task. No deployment had been done at the time of
+   writing; this option was later taken - see the Update at the top.
 4. Re-run `testnet:plan`, review the exact calldata, gas and maximum cost, and
    approve the resulting plan hash explicitly.
 
@@ -272,7 +300,9 @@ reports the missing prerequisite instead of faking a transaction.
 ## 11. Update (Task 5 continuation): Foundry found, local validation and plan prepared
 
 The earlier "tooling blocker" is resolved and item 3 above is partially
-progressed, still **without any Atlantic transaction**:
+progressed, still **without any Atlantic transaction** *(at the time of this
+note; the deployment and saga followed later the same day - see the Update at
+the top)*:
 
 - **Foundry was found in WSL Ubuntu** (`/home/wyka/.foundry/bin`, version
   1.2.3-stable: `forge`, `anvil`, `cast`). It was never on the Windows side.
@@ -286,13 +316,19 @@ progressed, still **without any Atlantic transaction**:
   DEPOSIT revert with `SIMULATED_UNWIND_SWAP`, and unknown-outcome
   reconciliation with no resubmission (`npm run demo:local`), plus a
   six-scenario gated-deployment safety check (`npm run demo:deploy-tooling`).
-- **Atlantic deployment plan regenerated (read-only, NOT executed)**:
+- **Atlantic deployment plan regenerated (read-only, not executed at this
+  snapshot)**:
   [`testnet-deployment-plan.md`](testnet-deployment-plan.md), plan hash (v2)
   `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`,
   3,400,000 total gas cap across 5 transactions, 0.034 PHRS planned spend at
   10 gwei. The gated runner described in
-  [testnet-deployment-tooling.md](testnet-deployment-tooling.md) has never run
-  against Atlantic.
+  [testnet-deployment-tooling.md](testnet-deployment-tooling.md) had not yet
+  run against Atlantic when this was written; it was executed later - see the
+  Update at the top.
 
-No `TestOnly*` contract has been deployed to Atlantic. Deployment remains a
-separate, explicitly approved task; see the plan document for preconditions.
+*(Snapshot: no `TestOnly*` contract had been deployed to Atlantic yet.
+Deployment remained a separate, explicitly approved task; see the plan document
+for preconditions. It was later approved and executed - five transactions, all
+confirmed - and the approved saga then ran against the deployed contracts; see
+the Update at the top and
+[`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).)*

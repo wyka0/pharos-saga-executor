@@ -8,17 +8,15 @@ as an installable agent skill for the Pharos Agent Arena task
 > ## Simulation and testnet notice
 >
 > **The default adapter is still simulation-only.** No wallet is used by the demo
-> path, no private key exists in this repository, and **no on-chain transaction was
-> sent or confirmed** by the simulations. **No live on-chain saga has executed.**
-> Every simulated receipt is branded
+> path, no private key exists in this repository, and **no on-chain transaction
+> was sent or confirmed** by the simulations. Every simulated receipt is branded
 > `simulated: true`, uses a `sim_*` reference, and has no transaction hash or
 > explorer link.
 >
-> A separate, gated **Pharos Atlantic testnet adapter** has been added. It is
-> read-only until a user approves an exact plan hash. At this time it is
-> **blocked**: the wallet now holds 20 test USDC, but there is no official
-> DEX/router or vault on Atlantic. **No live transaction has been sent** by this
-> project. The external 20 USDC funding transfer is verified in
+> The **official-protocol** Atlantic testnet adapter is still read-only and
+> **blocked**: the wallet holds 20 test USDC, but no officially documented
+> DEX/router or vault exists on Atlantic, and that path has never signed or
+> broadcast anything. The external 20 USDC funding transfer is verified in
 > [`docs/testnet-results.md`](docs/testnet-results.md).
 >
 > Simulated compensation is clearly labelled as a new simulated call, **not a
@@ -31,20 +29,26 @@ as an installable agent skill for the Pharos Agent Arena task
 > [`docs/local-anvil.md`](docs/local-anvil.md). This is **not** Atlantic or
 > mainnet evidence.
 >
-> **Atlantic deployment plan + gated tooling (prepared, not executed):** a
-> read-only plan (plan hash `7e1050c9…d4d806`) and a gated deployment runner
-> for the four `TestOnly*` contracts are ready. Nothing was signed or
-> broadcast; deployment requires explicit approval of the plan hash plus the
-> full gate chain described in
-> [`docs/testnet-deployment-tooling.md`](docs/testnet-deployment-tooling.md).
+> **Test-only Atlantic execution (2026-10-17, under two explicit plan-hash
+> approvals):** the gated runners deployed the four clearly labelled `TestOnly*`
+> mock contracts plus the minter wiring (deployment plan hash
+> `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`; five
+> transactions, all CONFIRMED) and then ran the five-step saga against them
+> (saga plan hash
+> `8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f`; five
+> transactions, all CONFIRMED; 0.00365623 PHRS total). These are **testnet runs
+> against test-only mocks** - not mainnet, not production protocols, and **not**
+> the official USDC (`0xcfC8...Fc8B`), which was never targeted. Full record:
+> [`docs/verified-output.md` section 14](docs/verified-output.md#iteration-7--atlantic-saga-execution).
 
 - Node.js 20+ (verified on Node 24.14.1)
 - Simulation path has no wallet, RPC or network calls; `viem` is used only by the
   gated testnet adapter and the local/testnet read-only tooling
 - State machine, retry policy, compensation, persistence, CLI and tests
-- **95 offline automated tests**, plus **16 Foundry contract tests** and two
-  local safety sessions: a **4-scenario Anvil saga demo** (`npm run demo:local`)
-  and a **6-scenario deploy-tooling check** (`npm run demo:deploy-tooling`)
+- **103 offline automated tests**, plus **16 Foundry contract tests** and three
+  local safety sessions: a **4-scenario Anvil saga demo** (`npm run demo:local`),
+  a **6-scenario deploy-tooling check** (`npm run demo:deploy-tooling`) and an
+  **8-scenario saga-tooling check** (`npm run demo:saga-tooling`)
 
 ---
 
@@ -63,8 +67,9 @@ as an installable agent skill for the Pharos Agent Arena task
 - [Persistence](#persistence)
 - [Testnet readiness (read-only)](#testnet-readiness-read-only)
 - [Local Anvil validation (test-only)](#local-anvil-validation-test-only)
-- [Atlantic deployment plan (prepared, not executed)](#atlantic-deployment-plan-prepared-not-executed)
+- [Atlantic deployment and saga execution (test-only)](#atlantic-deployment-and-saga-execution-test-only)
 - [Gated Atlantic deployment tooling (test-only)](#gated-atlantic-deployment-tooling-test-only)
+- [Gated Atlantic saga tooling (test-only)](#gated-atlantic-saga-tooling-test-only)
 - [Skill packaging and environment](#skill-packaging-and-environment)
 - [Tests and verification](#tests-and-verification)
 - [Safety](#safety)
@@ -86,7 +91,7 @@ npm run demo:manual
 npm run demo:unknown
 ```
 
-Expected: **95 tests pass**, then four simulation demos ending in `COMPLETED`,
+Expected: **103 tests pass**, then four simulation demos ending in `COMPLETED`,
 `FAILED` (compensation success), `MANUAL_RECOVERY_REQUIRED` (compensation
 failure), and `MANUAL_RECOVERY_REQUIRED` (unknown outcome).
 
@@ -97,6 +102,7 @@ Optional local-only extra (requires Foundry in WSL, see
 wsl.exe -d Ubuntu -- /bin/bash --noprofile --norc -c 'cd /mnt/c/pharos-saga-executor && /home/wyka/.foundry/bin/forge test -vv'
 npm run demo:local
 npm run demo:deploy-tooling
+npm run demo:saga-tooling
 ```
 
 Optional read-only Atlantic deployment plan (requires the local env file and
@@ -147,8 +153,8 @@ project therefore implements **honest compensation**, never a fake rollback:
 | Never claim simulated = live | receipt verifier, CLI text, safety tests | `test/safety.test.ts`, `scripts/check-safety.mjs` |
 | Deterministic clock and jitter in tests | `VirtualClock`, injectable `JitterSource` | `test/helpers.ts` |
 | Real local chain execution, test-only | `LocalAnvilAdapter`, `TestOnly*` contracts, state guard 31337 | `npm run demo:local`, `contracts/test/*.t.sol` |
-| Atlantic deployment prepared without sending | read-only plan script, stable plan hash, bytecode hashes | `docs/testnet-deployment-plan.md`, `npm run testnet:deploy-plan` |
-| Gated Atlantic deployment tooling, test-only | gated runner, INTENT journal, PHRS ceiling, plan-hash + confirmation gates | `npm run demo:deploy-tooling`, `docs/testnet-deployment-tooling.md` |
+| Atlantic test-only deployment, executed under approval | gated runner, read-only plan + stable plan hash, bytecode/runtime verification, INTENT journal, PHRS ceiling | `docs/testnet-deployment-plan.md`, `docs/testnet-deployment-tooling.md`, `npm run demo:deploy-tooling` |
+| Atlantic test-only saga, executed under approval | gated five-step runner, plan-hash gate, INTENT journal, calldata-hash binding, no resend | `docs/verified-output.md` section 14, `docs/testnet-saga-tooling.md`, `npm run demo:saga-tooling` |
 
 ## Quick start
 
@@ -488,6 +494,11 @@ transaction hash exists.
 the plan **and** `--confirm-atlantic-testnet`. It also re-checks the live chain ID
 and the plan hash before the adapter can sign. It has not been run.
 
+This blocked plan is the **official-protocol** path. The separately approved
+**test-only mock** deployment and saga (see the notice above) were executed on
+Atlantic testnet and are recorded in
+[`docs/verified-output.md` section 14](docs/verified-output.md#iteration-7--atlantic-saga-execution).
+
 Full findings: [`docs/testnet-readiness.md`](docs/testnet-readiness.md).
 Execution/approval status: [`docs/testnet-results.md`](docs/testnet-results.md).
 
@@ -512,7 +523,7 @@ npm run demo:local   # starts Anvil in WSL, deploys TestOnly* contracts, runs 4 
 Details, exact commands and observed output:
 [`docs/local-anvil.md`](docs/local-anvil.md).
 
-## Atlantic deployment plan (prepared, not executed)
+## Atlantic deployment and saga execution (test-only)
 
 A read-only plan for deploying the four clearly labelled `TestOnly*` contracts
 to Atlantic testnet was prepared for review:
@@ -524,8 +535,7 @@ npm run testnet:deploy-plan -- --env-file <local-env> --address 0xE2B8651178ade1
 It reads memoized chain state (block, balances, pending nonce, gas price) and
 compiled artifact hashes, then prints per-contract gas estimates, gas caps,
 predicted CREATE addresses and a stable plan hash. The script has no send or
-sign path (enforced by the safety gate), never reads the private key, and
-nothing was broadcast.
+sign path (enforced by the safety gate) and never reads the private key.
 
 - Plan hash (v2, after the F-1 contract hardening):
   `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`
@@ -534,14 +544,24 @@ nothing was broadcast.
   operator ceiling **0.05 PHRS**
 - Full plan: [`docs/testnet-deployment-plan.md`](docs/testnet-deployment-plan.md)
 
-Execution is a separate, explicitly approved future task; the predicted
-addresses are not valid until deployment receipts exist. The gated runner that
-would perform it is described in the next section and has only ever been run
-against disposable local chains.
+**Executed (2026-10-17):** the plan hash was explicitly approved and the gated
+runner executed all five deployment transactions - nonces 13-17, total gas
+**2,471,030** (**0.0247103 PHRS** at 10 gwei), all **CONFIRMED**. The four
+`TestOnly*` contracts were deployed exactly at the predicted CREATE addresses
+and the minter was wired (deployment journal
+`.local/atlantic-deploy/deploy-journal.json`). The approved five-step saga plan
+(`8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f`) then ran
+against them - nonces 18-22, total gas **365,623** (**0.00365623 PHRS**), all
+**CONFIRMED**. Both runs are test-only mock activity on chainId 688689: no
+mainnet deployment, no production protocol, and the official USDC was never
+targeted.
 
 ## Gated Atlantic deployment tooling (test-only)
 
-The deployment path is a separate gated runner (the only code that can send):
+The deployment path is a separate gated runner (with the saga runner below, the
+only code that can send). **Executed status:** the approved plan hash was run on
+2026-10-17; all five deployment transactions are CONFIRMED - see
+[`docs/verified-output.md` section 14](docs/verified-output.md#iteration-7--atlantic-saga-execution).
 
 - `scripts/testnet-deploy.ts` — CLI; atlantic mode requires
   `--approve-plan <hash>` **and** `--confirm-atlantic-testnet`, force-rebuilds
@@ -556,6 +576,32 @@ The deployment path is a separate gated runner (the only code that can send):
   slot.
 
 Full details: [`docs/testnet-deployment-tooling.md`](docs/testnet-deployment-tooling.md).
+
+## Gated Atlantic saga tooling (test-only)
+
+The saga path is a second gated runner with its own shared plan core:
+
+- `src/testnet/sagaPlan.ts` + `src/testnet/saga/` - read-only plan core, shared
+  read-only verification, durable journal and the only saga send path;
+- `scripts/testnet-saga-plan.ts` - read-only plan printer
+  (`npm run testnet:saga-plan`); never reads a key;
+- `scripts/testnet-saga.ts` - gated CLI (`npm run testnet:saga`). Atlantic mode
+  requires `--approve-plan <hash>` **and** `--confirm-atlantic-testnet`,
+  resolves the contract addresses from the deployment journal (never from
+  flags), force-rebuilds the contracts, re-verifies runtime code and wiring,
+  enforces the 0.02 PHRS ceiling, journals `INTENT` before every send,
+  hash-binds each mined input to its journaled calldata, and never resends an
+  ambiguous outcome;
+- `scripts/local-saga-check.ts` - eight-scenario local safety check
+  (`npm run demo:saga-tooling`): 81/81 checks - happy path, mint-skip, wrong
+  chain, forced revert, ambiguous outcome, altered calldata, broken
+  postcondition, changed pre-state.
+
+The approved plan hash
+`8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f` was
+**executed on Atlantic testnet** - all five transactions CONFIRMED
+([record](docs/verified-output.md#iteration-7--atlantic-saga-execution)). Full
+details: [`docs/testnet-saga-tooling.md`](docs/testnet-saga-tooling.md).
 
 ## Skill packaging and environment
 
@@ -610,10 +656,17 @@ npm run verify
 - local-anvil configuration gating, local receipt verification (no explorer
   links, chainId 31337 only), bounded vault allowance rules, and the durable
   local journal (INTENT before send);
+- saga-tooling golden values and semantics: the approved plan hash and all five
+  calldata strings, plan-hash binding, deployment-journal address resolution,
+  journal statuses (INTENT/UNKNOWN block re-runs) and the official-USDC
+  exclusion;
 - static safety checks, including isolation of the local-anvil files from
-  Atlantic/mainnet targets, a read-only assertion on the deployment plan script,
-  and the deployment-tooling invariants (INTENT journal before sends, PHRS hard
-  ceiling, mandatory confirmation flag, runtime-code verification, lazy key load).
+  Atlantic/mainnet targets, read-only assertions on both plan scripts, the
+  deployment-tooling invariants (INTENT journal before sends, PHRS hard
+  ceiling, mandatory confirmation flag, runtime-code verification, lazy key
+  load), and the saga-tooling invariants (plan-hash gate, INTENT journal,
+  0.02 PHRS ceiling, confirmation flag, calldata-hash binding, no resend,
+  official-USDC guard).
 
 The suite uses `VirtualClock`, fixed jitter, a fake testnet client and temporary
 state directories, so it needs no wallet, live network, real funds or real-time
@@ -621,17 +674,27 @@ retry waits. Exact test counts and command output are recorded in
 [`docs/verified-output.md`](docs/verified-output.md).
 
 The separate Foundry suite (`contracts/test/*.t.sol`, 16 tests) and the local
-safety sessions - the four-scenario saga demo (`npm run demo:local`) and the
-six-scenario deploy-tooling check (`npm run demo:deploy-tooling`) - are
-documented in [`docs/local-anvil.md`](docs/local-anvil.md).
+safety sessions - the four-scenario saga demo (`npm run demo:local`), the
+six-scenario deploy-tooling check (`npm run demo:deploy-tooling`) and the
+eight-scenario saga-tooling check (`npm run demo:saga-tooling`) - are
+documented in [`docs/local-anvil.md`](docs/local-anvil.md) and
+[`docs/testnet-saga-tooling.md`](docs/testnet-saga-tooling.md).
 
 ## Safety
 
 - The simulation path uses no wallet, private key, mnemonic, seed phrase, session
   token, `.env`, RPC endpoint or signing library.
-- The testnet adapter is Atlantic-only (chainId 688689), never targets mainnet,
-  and cannot sign without an explicit plan-hash approval plus the CLI confirmation
-  gate. No testnet transaction has been sent.
+- The official-protocol testnet adapter is Atlantic-only (chainId 688689), never
+  targets mainnet, and cannot sign without an explicit plan-hash approval plus
+  the CLI confirmation gate; it has never sent a transaction and its plan stays
+  blocked.
+- The gated deployment and saga runners are the only code with a send path. They
+  sign only when the freshly rebuilt plan matches an explicitly approved hash
+  (plus the `--confirm-atlantic-testnet` gate), journal `INTENT` before every
+  send, and never resend an ambiguous outcome. The only transactions this
+  project has ever sent are the approved **test-only** Atlantic deployment and
+  saga recorded in
+  [`docs/verified-output.md` section 14](docs/verified-output.md#iteration-7--atlantic-saga-execution).
 - Simulated receipts cannot pass verification if they contain `simulated:false`,
   a `0x` transaction reference, `txHash`, `transactionHash`, `blockNumber`,
   `blockHash` or an explorer URL.
@@ -645,15 +708,18 @@ documented in [`docs/local-anvil.md`](docs/local-anvil.md).
 
 ## Limitations
 
-- Live testnet execution is currently **blocked**: no verified Atlantic
-  swap/router or vault exists, so the plan contains zero transactions.
-- The real transaction path is validated only on a disposable local Anvil chain
-  with `TestOnly*` mocks (chainId 31337, `npm run demo:local`). It is not
-  Atlantic testnet evidence.
-- The Atlantic deployment plan is prepared but **not executed**: no `TestOnly*`
-  contract has been deployed to Atlantic, and predicted CREATE addresses are not
-  valid until real deployment receipts exist. A gated runner for it exists and
-  is locally tested, but it has never run against Atlantic.
+- **Official-protocol** live testnet execution is currently **blocked**: no
+  officially documented Atlantic swap/router or vault exists, so that plan
+  contains zero transactions.
+- The real transaction path is exercised on disposable local Anvil chains
+  (`TestOnly*` mocks, chainId 31337) **and** on Atlantic testnet through the
+  approved test-only deployment and saga. None of it is production or
+  official-protocol integration; the mocks are not a DEX and not a vault.
+- The Atlantic test-only deployment **was executed** (2026-10-17): the four
+  `TestOnly*` contracts and the minter wiring are deployed at the addresses
+  predicted by the approved plan, and the approved five-step saga ran against
+  them (all five transactions CONFIRMED). These remain test-only mocks on a
+  testnet; nothing was deployed to mainnet.
 - No mainnet adapter exists. Mainnet is explicitly rejected.
 - The simulated ledger is serialised within one process; the testnet journal is
   also single-process.

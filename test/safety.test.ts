@@ -14,10 +14,14 @@ const localOnlyFilePaths = [
   path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
   path.join(ROOT, 'scripts', 'local-anvil.ts'),
   path.join(ROOT, 'scripts', 'local-deploy-check.ts'),
+  path.join(ROOT, 'scripts', 'local-saga-check.ts'),
 ];
 
-/** The gated deployment CLI is the only script allowed to send (atlantic mode). */
-const testnetSendFilePaths = [path.join(ROOT, 'scripts', 'testnet-deploy.ts')];
+/** The gated deployment and saga CLIs are the only scripts allowed to send. */
+const testnetSendFilePaths = [
+  path.join(ROOT, 'scripts', 'testnet-deploy.ts'),
+  path.join(ROOT, 'scripts', 'testnet-saga.ts'),
+];
 
 async function listFiles(dir: string): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -36,7 +40,10 @@ test('executable simulation source contains no wallet, signing, RPC or network s
     ...(await listFiles(path.join(ROOT, 'scripts'))),
   ].filter((file) => file.endsWith('.ts'));
   const localOnlyFiles = new Set(localOnlyFilePaths);
-  const testnetReadOnlyFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts')]);
+  const testnetReadOnlyFiles = new Set([
+    path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts'),
+    path.join(ROOT, 'scripts', 'testnet-saga-plan.ts'),
+  ]);
   const testnetSendFiles = new Set(testnetSendFilePaths);
   const simulationFiles = allFiles.filter(
     (file) =>
@@ -87,6 +94,7 @@ test('testnet adapter is isolated from mainnet and never targets rpc.pharos.xyz'
     ...(await listFiles(path.join(ROOT, 'src', 'testnet'))),
     path.join(ROOT, 'src', 'adapters', 'pharosTestnet.ts'),
     path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts'),
+    path.join(ROOT, 'scripts', 'testnet-saga-plan.ts'),
     ...testnetSendFilePaths,
   ].filter((file) => file.endsWith('.ts'));
   assert.ok(testnetFiles.length >= 5);
@@ -117,6 +125,38 @@ test('testnet adapter is isolated from mainnet and never targets rpc.pharos.xyz'
   assert.match(deployCli, /--confirm-atlantic-testnet/);
   assert.match(deployCli, /--approve-plan/);
   assert.match(deployCli, /keyProvider/);
+
+  const sagaPlanScript = await fs.readFile(
+    path.join(ROOT, 'scripts', 'testnet-saga-plan.ts'),
+    'utf8',
+  );
+  assert.doesNotMatch(sagaPlanScript, /sendTransaction|writeContract|deployContract|sendRawTransaction/);
+  assert.doesNotMatch(sagaPlanScript, /PRIVATE_KEY|privateKey|mnemonic/);
+
+  const sagaCore = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'sagaPlan.ts'), 'utf8');
+  assert.match(sagaCore, /ATLANTIC_CHAIN_ID/);
+  assert.doesNotMatch(
+    sagaCore,
+    /sendTransaction|writeContract|deployContract|sendRawTransaction|privateKey|PRIVATE_KEY|mnemonic/,
+  );
+  const sagaRunner = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'saga', 'runner.ts'), 'utf8');
+  assert.match(sagaRunner, /INTENT/);
+  assert.match(sagaRunner, /SAGA_CEILING_WEI/);
+  assert.match(sagaRunner, /confirmAtlanticTestnet/);
+  assert.match(sagaRunner, /verifyRuntimeCode/);
+  assert.match(sagaRunner, /dataSha256/);
+  assert.match(sagaRunner, /officialUsdc/);
+  assert.match(sagaRunner, /resent/);
+  assert.match(sagaRunner, /REVERTED/);
+  assert.match(sagaRunner, /UNKNOWN/);
+  assert.match(sagaRunner, /postcondition/);
+  const sagaJournal = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'saga', 'journal.ts'), 'utf8');
+  assert.match(sagaJournal, /'INTENT'/);
+  const sagaCli = await fs.readFile(path.join(ROOT, 'scripts', 'testnet-saga.ts'), 'utf8');
+  assert.match(sagaCli, /--confirm-atlantic-testnet/);
+  assert.match(sagaCli, /--approve-plan/);
+  assert.match(sagaCli, /keyProvider/);
+  assert.match(sagaCli, /deployJournalPath/);
 });
 
 test('local anvil adapter is isolated to a disposable chain and never targets Atlantic or mainnet', async () => {
@@ -156,7 +196,15 @@ test('package manifest permits only viem for testnet and no other chain SDK', as
   for (const banned of ['ethers', 'web3', 'wagmi', '@solana/web3.js', 'hardhat']) {
     assert.equal(all.includes(banned), false, `${banned} must not be installed`);
   }
-  for (const script of ['test', 'demo:success', 'demo:failure', 'demo:local', 'verify']) {
+  for (const script of [
+    'test',
+    'demo:success',
+    'demo:failure',
+    'demo:local',
+    'demo:deploy-tooling',
+    'demo:saga-tooling',
+    'verify',
+  ]) {
     assert.ok(manifest.scripts[script], `missing npm script ${script}`);
   }
 });
@@ -201,6 +249,15 @@ test('all rubric-required project files exist', () => {
     'scripts/demo-success.ts',
     'scripts/demo-failure.ts',
     'test/state-machine.test.ts',
+    'src/testnet/sagaPlan.ts',
+    'src/testnet/saga/runner.ts',
+    'src/testnet/saga/journal.ts',
+    'src/testnet/saga/verify.ts',
+    'scripts/testnet-saga.ts',
+    'scripts/testnet-saga-plan.ts',
+    'scripts/local-saga-check.ts',
+    'test/saga-tooling.test.ts',
+    'docs/testnet-saga-tooling.md',
   ];
   for (const file of required) {
     assert.equal(existsSync(path.join(ROOT, file)), true, `missing required file ${file}`);

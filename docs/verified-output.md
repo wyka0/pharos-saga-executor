@@ -9,11 +9,38 @@ Adapter: **simulated** (iteration 1) plus a **gated Atlantic testnet adapter** (
 >
 > **Sections 1-8 are iteration 1:** deterministic simulation. No transaction hash,
 > block number or explorer link exists there; no real transaction was sent and
-> **no live on-chain saga has executed**.
+> **no live on-chain saga had executed at that point** (the executed run is
+> recorded in [section 14](#iteration-7--atlantic-saga-execution)).
 >
 > **Section 9 is iteration 2:** live **read-only** Atlantic testnet checks
 > (chain id, balances, token metadata, plan generation). No transaction was
 > signed or broadcast. The live plan is blocked and contains zero transactions.
+>
+> **Status addendum (2026-10-18, later iterations):** sections 10-13 extend this
+> record with testnet iterations (read-only checks, local-chain runs and gated
+> tooling records); **section 14 records the gated Atlantic testnet saga run
+> that was explicitly approved and executed** - five confirmed transactions on
+> chainId 688689 against the test-only mock contracts. No mainnet transaction
+> was ever sent.
+>
+> The **test-only deployment** those contracts come from was itself explicitly
+> approved and executed on 2026-10-17 (deployment plan hash
+> `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`; five
+> transactions, all CONFIRMED; deployment journal
+> `.local/atlantic-deploy/deploy-journal.json`; total gas used 2,471,030 =
+> 0.0247103 PHRS at 10 gwei), and the saga executed against it under the
+> approved saga plan hash
+> `8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f` - see
+> [section 14](#iteration-7--atlantic-saga-execution).
+>
+> **Sections 1-13 are historical iteration records:** status lines and
+> classification tables there (e.g. "no live transaction sent", "nothing
+> signed or broadcast", "not deployed", "still 0", "none") describe their own
+> iteration only and must not be read as the current state. The
+> official-protocol adapter remains blocked (no officially documented Atlantic
+> router/vault exists), and the mocks remain test-only: `TestOnlyUSDC` /
+> `TestOnlyReceiptToken` (tUSDC / tSAGA) are not the official USDC
+> (`0xcfC8...Fc8B`), which was never targeted.
 
 ## 1. Command summary
 
@@ -548,6 +575,14 @@ Status: **no live transaction sent**. The testnet plan is blocked and contains
 zero transactions. See [testnet-readiness.md](testnet-readiness.md) and
 [testnet-results.md](testnet-results.md).
 
+> **Update (2026-10-18):** this section is the iteration-2 record. "No live
+> transaction sent", the zero counts in 9.3.1/9.5 and the "none" classification
+> in 9.6 were accurate then; they are superseded by the later executed
+> test-only workflow - see
+> [section 14](#iteration-7--atlantic-saga-execution). The official-protocol
+> plan described here is **still** blocked (no officially documented Atlantic
+> router/vault).
+
 ## 9.1 Baseline preservation
 
 Before the extension:
@@ -708,6 +743,10 @@ the missing verified spender/protocol is.
 | Project explorer links | **none** |
 | External funding transaction | `0x9e4834...76370b`, success, fee `0.00018637775 PHRS` |
 
+*Iteration-2 record: the "by this project" counts above were accurate then and
+are superseded by the later executed test-only workflow - see
+[section 14](#iteration-7--atlantic-saga-execution).*
+
 A separate read-only `eth_estimateGas` for a hypothetical 0.01 USDC
 `approve(Permit2, amount)` returned 71,377 gas at 10 gwei (0.00071377 PHRS at
 gas price; 0.00142754 PHRS at the adapter's 2x ceiling). This was **not** a
@@ -722,7 +761,7 @@ proposed or executed transaction and Permit2 is not used as a protocol spender.
 | `0x9e4834...76370b` | **EXTERNAL LIVE TESTNET TRANSFER** (20 USDC funding); not sent by this project |
 | `test/testnet.test.ts` | **MOCKED** chain client, offline |
 | `npm run demo:*` | **SIMULATED** adapter, offline |
-| Project-originated transaction hash | **none** |
+| Project-originated transaction hash | **none** *(iteration 2; superseded - see [section 14](#iteration-7--atlantic-saga-execution))* |
 
 No mocked or simulated result is presented as live testnet evidence.
 
@@ -731,6 +770,11 @@ No mocked or simulated result is presented as live testnet evidence.
 Iteration 3 adds a real execution path on a **disposable local chain** and
 prepares (does not execute) an Atlantic deployment plan. No Atlantic or mainnet
 transaction was sent by this iteration either.
+
+> **Update (2026-10-18):** this section is the iteration-3 record. The plan was
+> prepared only at this point and was later explicitly approved and executed -
+> see [section 14](#iteration-7--atlantic-saga-execution); the "not deployed"
+> rows in 10.6 are superseded.
 
 ### 10.1 Foundry environment
 
@@ -753,7 +797,7 @@ wsl.exe -d Ubuntu -- /bin/bash --noprofile --norc -c 'cd /mnt/c/pharos-saga-exec
 Result: **8 tests passed, 0 failed** across 2 suites
 (`TestOnlySagaTest` = 7, `DeploymentGasTest` = 1).
 
-> Superseded by [section 11](#11-iteration-4--contract-hardening-f-1--gated-deployment-tooling):
+> Superseded by [section 11](#iteration-4--contract-hardening-f-1--gated-deployment-tooling):
 > after the F-1 hardening the suite is **16 tests** and every gas number below
 > changed.
 
@@ -829,13 +873,17 @@ Atlantic/mainnet and the read-only property of the deployment plan script.
 
 ### 10.6 Classification (iteration 3)
 
+> **Update (2026-10-18):** this table is the iteration-3 record. Its last two
+> rows are superseded: the test-only contracts were deployed on 2026-10-17 -
+> see [section 14](#iteration-7--atlantic-saga-execution).
+
 | Artifact | Classification |
 | --- | --- |
 | `npm run demo:local` transactions | **REAL transactions on a disposable local chain (chainId 31337)**; not testnet evidence |
 | Foundry tests + gas snapshot | **LOCAL EVM**, offline |
 | `npm run testnet:deploy-plan` output | **LIVE READ-ONLY** Atlantic chain data; no transaction |
-| `TestOnly*` on Atlantic | **not deployed** (nonexistent until an approved separate task) |
-| Atlantic/mainnet transactions by this project | **still 0** |
+| `TestOnly*` on Atlantic | **not deployed** (nonexistent until an approved separate task) *(superseded - deployed 2026-10-17; see [section 14](#iteration-7--atlantic-saga-execution))* |
+| Atlantic/mainnet transactions by this project | **still 0** *(iteration 3; the approved test-only Atlantic deployment and saga ran later - see [section 14](#iteration-7--atlantic-saga-execution); mainnet remains 0)* |
 
 Local success is never presented as Atlantic evidence, and predicted addresses
 are never presented as deployed addresses.
@@ -847,6 +895,11 @@ are never presented as deployed addresses.
 Date: **2026-10-18**
 Status: **nothing signed or broadcast.** The Atlantic deployment remains
 unauthorized; the plan below is prepared for explicit approval only.
+
+> **Update (2026-10-18):** this section is the iteration-4 record. The status
+> line above was accurate for that iteration only: the plan was later
+> explicitly approved and executed, and the approved saga followed - see
+> [section 14](#iteration-7--atlantic-saga-execution) and the note at 11.6.
 
 ## 11.1 Contract hardening (F-1)
 
@@ -943,14 +996,361 @@ Additional recorded runs (final):
 
 ## 11.6 Classification (iteration 4)
 
+> **Update (2026-10-18):** this table is the iteration-4 record. Its last two
+> rows and the paragraph below it are superseded: the plan was explicitly
+> approved and executed on 2026-10-17 and the approved saga followed - see
+> [section 14](#iteration-7--atlantic-saga-execution).
+
 | Artifact | Classification |
 | --- | --- |
 | `demo:deploy-tooling` transactions | **REAL transactions on disposable local chains (chainId 31337 / test chainId 5)**; not testnet evidence |
 | Foundry tests + gas numbers | **LOCAL EVM**, offline |
 | `npm run testnet:deploy-plan` output | **LIVE READ-ONLY** Atlantic chain data; no transaction |
-| `TestOnly*` on Atlantic | **not deployed** (nonexistent until an approved separate task) |
-| Atlantic/mainnet transactions by this project | **still 0** |
+| `TestOnly*` on Atlantic | **not deployed** (nonexistent until an approved separate task) *(superseded - deployed 2026-10-17; see [section 14](#iteration-7--atlantic-saga-execution))* |
+| Atlantic/mainnet transactions by this project | **still 0** *(iteration 4; the approved test-only Atlantic deployment and saga ran later - see [section 14](#iteration-7--atlantic-saga-execution); mainnet remains 0)* |
 
 The gated runner has never been executed against Atlantic; only its local mode
 (`--mode local-anvil`) has run. The Atlantic mode requires the new plan hash
 to be explicitly approved first, and no such approval has been given.
+
+*The paragraph above is the iteration-4 record; the Atlantic mode of the gated
+runner **was** later approved and executed (2026-10-17) - see
+[section 14](#iteration-7--atlantic-saga-execution).*
+
+# Iteration 5 — gated `TestOnly*` saga tooling (saga runner)
+
+The five-step saga tooling was added on top of the deployment tooling. The
+four `TestOnly*` contracts are live on Atlantic and were re-verified read-only
+in this iteration: deployed runtime code at all four addresses matches the
+fresh artifacts (immutables masked), the artifact hashes match the deployment
+journal, and the wiring getters pass (`quote(1000000) == 990000`,
+`feeBps == 100`, minter set, pairwise-distinct contracts, `tUSDC !=` official
+USDC). No transaction was signed or broadcast by this iteration.
+
+## 12.1 Files
+
+| File | Role |
+| --- | --- |
+| `src/testnet/sagaPlan.ts` | read-only plan core: 5 steps, calldata, gas caps (total 840000), plan hash, deploy-journal address resolution |
+| `src/testnet/saga/verify.ts` | shared read-only checks: runtime code, wiring, per-step pre/postconditions, end-of-saga battery |
+| `src/testnet/saga/journal.ts` | durable saga journal (INTENT written before any send) |
+| `src/testnet/saga/runner.ts` | the only send path: gates + one send per step + receipt/calldata-hash/postcondition verification |
+| `scripts/testnet-saga.ts` | gated CLI (`--mode atlantic` / `--mode local-anvil`) |
+| `scripts/testnet-saga-plan.ts` | read-only plan printer with bounded retry on transient RPC throttling |
+| `scripts/local-saga-check.ts` | eight-scenario Anvil safety check |
+| `test/saga-tooling.test.ts` | golden hash + calldata tests, hash binding, resolver, journal |
+
+## 12.2 Golden verification
+
+The module reproduces the reviewed plan byte-for-byte:
+
+```text
+plan hash fresh:   8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f
+plan hash reviewed:8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f
+CORE BYTE-IDENTITY: PASS
+calldata MintTusdc / ApproveTusdcToSwap / SwapTusdcForReceipt /
+ApproveReceiptToVault / DepositReceiptToVault: PASS (5/5)
+```
+
+`test/saga-tooling.test.ts` pins this hash, all five calldata strings, the
+invariants (order, targets, amounts, caps, ceiling) and the hash-binding
+properties. It also proves the deployment-journal resolver refuses any
+unresolved deployment entry.
+
+## 12.3 Live read-only plan (Atlantic, nothing sent)
+
+`npm run testnet:saga-plan -- --env-file <path> --address <deployer>
+--expect-plan 8faa2e69…720f`:
+
+- chainId 688689, live block, pending nonce and gas price re-read;
+- pre-state: all tUSDC/tSAGA balances and allowances 0, no shares, swap empty,
+  official USDC balance 20.000000 (unchanged expectation);
+- worst case: 840000 gas x 10 gwei = 0.0084 PHRS, under the 0.02 PHRS ceiling,
+  covered by the 0.5179… PHRS balance;
+- plan hash MATCH.
+
+## 12.4 Verification runs
+
+```text
+forge build --force: 26 files, Solc 0.8.24, compiler run successful
+forge test -vv: 16/16 pass (7 saga + 8 auth + 1 deployment-gas)
+npm test: 102 tests, 102 pass, 0 fail, 0 skipped (~23.2 s)
+npm run verify: build + tests + safety gate PASS (exit 0)
+```
+
+Test distribution: 95 previous + 7 saga-tooling = **102**. The safety gate now
+also covers the saga plan script (no send path), the saga runner (INTENT,
+ceiling, confirmation flag, runtime code, calldata hash, official-USDC guard,
+never-resend) and the saga CLI (confirmation flag, approve hash, lazy key).
+
+## 12.5 Local tooling check (`npm run demo:saga-tooling`)
+
+Eight scenarios, **81/81 checks PASS** on disposable Anvil chains
+(chainId 31337/5, loopback only, no keys):
+
+| Scenario | Result |
+| --- | --- |
+| A happy path (mint required) | 5 real local txs, all CONFIRMED, journal nonces consecutive, every on-chain input hash matches the journal, full end-state battery holds (shares 990000, supply 990000, swap 1000000 tUSDC) |
+| A2 pre-funded (seed 1.000000) | mint skipped (4 txs, no MintTusdc entry, no nonce consumed); a re-run sends nothing and still reports COMPLETE |
+| B wrong chain (chainId 5) | refused before any send, no journal created |
+| C forced swap revert | third entry REVERTED, stops, allowance/balance untouched |
+| D automine off + 2.5 s timeout | exactly one broadcast, UNKNOWN entry; after mining, the re-run refuses to resend and the journal is unchanged |
+| E altered calldata on approve | receipt input hash mismatch caught, entry UNKNOWN, stops (flipped byte reached the chain: allowance 1000001) |
+| F postcondition break on mint | drift caught (balance 1000001 vs expected 1000000), entry UNKNOWN, stops |
+| G pre-existing 123456 tUSDC | refused before any send, no journal, balance untouched |
+
+Also re-run and preserved: `demo:success`, `demo:failure`, `demo:manual`,
+`demo:unknown` all PASS; `demo:local` 4/4 PASS; `demo:deploy-tooling`
+6/6 PASS. Foundry tests unchanged and green.
+
+## 12.6 Classification (iteration 5)
+
+> **Update (2026-10-18):** this table is the iteration-5 record. Its last row
+> ("The saga run itself") and the paragraph below the table are superseded: the
+> plan hash was explicitly approved and the Atlantic saga executed - see
+> [section 14](#iteration-7--atlantic-saga-execution).
+
+| Artifact | Classification |
+| --- | --- |
+| `demo:saga-tooling` / deploy-tooling transactions | **REAL transactions on disposable local chains (chainId 31337/5)**; not testnet evidence |
+| Foundry tests + gas numbers | **LOCAL EVM**, offline |
+| `npm run testnet:saga-plan` output | **LIVE READ-ONLY** Atlantic chain data; no transaction |
+| Atlantic transactions from this iteration | **0** (nothing signed or broadcast) |
+| The saga run itself | **not executed**; requires explicit approval of the plan hash above (superseded - see [section 14](#iteration-7--atlantic-saga-execution)) |
+
+The gated saga runner has never run against Atlantic; only its local mode has
+run. The Atlantic mode refuses to send unless its freshly rebuilt plan hash
+matches the explicitly approved hash.
+
+# Iteration 6 — pre-execution review (mint policy clarification)
+
+Date: **2026-10-18**. Status: **nothing signed or broadcast.** The Atlantic
+saga run remains unauthorized pending explicit approval of the plan hash.
+
+> **Update (2026-10-18):** this section is preserved as the iteration-6
+> pre-execution review record. The status above is superseded: the plan hash was
+> explicitly approved and the saga executed on Atlantic testnet - see
+> [section 14](#iteration-7--atlantic-saga-execution).
+
+## 13.1 Mint step: discrepancy resolved, plan hash unchanged
+
+The mint step was described with different strictness in two places: the
+byte-frozen plan core carries the descriptive string `skip if tUSDC
+balanceOf(controller) >= 1000000; mint exactly 1.000000 tUSDC otherwise`,
+while the runner enforces three exact branches. The review removed the
+ambiguity by pinning the enforced policy explicitly (a runner comment plus a
+"Mint step policy (exact)" section in `docs/testnet-saga-tooling.md`) without
+touching the hashed core:
+
+- balance exactly `0` -> sends `mint(deployer, 1000000)` (exactly 1.000000);
+- balance exactly `1000000` -> step skipped (no transaction, no nonce
+  consumed, no journal entry);
+- any other balance -> run stops before any signing, broadcast or journal
+  write.
+
+The exact check is implemented in `src/testnet/saga/runner.ts`, outside the
+hashed plan core; the core's `conditional` string is descriptive only and
+never drives what is sent. The core was not modified, so the plan hash is
+unchanged and still reproduces byte-for-byte:
+
+```text
+fresh hash:    8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f
+reviewed hash: 8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f
+PLAN HASH: PASS
+CORE BYTE-IDENTITY: PASS
+calldata MintTusdc / ApproveTusdcToSwap / SwapTusdcForReceipt /
+ApproveReceiptToVault / DepositReceiptToVault: PASS (5/5)
+```
+
+Non-vacuous coverage of the three branches (real runner, disposable Anvil):
+scenario A (zero balance -> five confirmed transactions, journaled nonces,
+per-transaction input hashes, full end battery), A2 (exactly 1.000000 -> mint
+skipped, 4 txs, no MintTusdc entry; a re-run sends nothing), G (123456 ->
+stop before any send, no journal file created, balance untouched). A new unit
+test additionally pins that no step target, spender, calldata or core byte
+embeds the official USDC address; only the four TestOnly* contracts are ever
+targeted.
+
+## 13.2 Verification runs (all re-run in this iteration)
+
+```text
+forge build --force: 26 files, Solc 0.8.24, compiler run successful
+forge test -vv: 16 tests passed, 0 failed, 0 skipped (3 suites)
+npm run verify: build exit 0; 103 tests, 103 pass, 0 fail, 0 skipped (~23.0 s); SAFETY GATE PASSED
+npm run demo:saga-tooling: 81/81 checks, 8 scenarios PASS
+npm run demo:local: 4/4 PASS; npm run demo:deploy-tooling: 6/6 PASS
+demo:success / demo:failure / demo:manual / demo:unknown: PASS
+gated CLI: no args -> usage, exit 1; atlantic without --confirm-atlantic-testnet
+-> refusal, exit 1 (no key read, no send)
+```
+
+## 13.3 Live read-only preflight (nothing sent)
+
+`npm run testnet:saga-plan -- --env-file <path> --address <deployer>
+--expect-plan 8faa2e69…720f`: block 31550491; chainId 688689; pending nonce 18;
+gas price 10 gwei; PHRS balance 0.517903655838483504; all four contracts
+re-verified (runtime code immutables-masked, artifact hashes vs the deployment
+journal, full wiring); pre-state all zero; official USDC 20.000000 (unchanged
+expectation); worst case 840000 gas x 10 gwei = 0.0084 PHRS under the 0.02
+ceiling and covered by the balance; plan hash MATCH.
+
+## 13.4 Classification (iteration 6)
+
+| Artifact | Classification |
+| --- | --- |
+| local demos / Foundry results | **LOCAL EVM on disposable chains** (chainId 31337/5); not testnet evidence |
+| `npm run testnet:saga-plan` output | **LIVE READ-ONLY** Atlantic chain data; no key, no transaction |
+| Atlantic transactions from this iteration | **0** (nothing signed or broadcast) |
+| The saga run itself | **not executed**; requires explicit approval of the plan hash above (superseded - see [section 14](#iteration-7--atlantic-saga-execution)) |
+
+---
+
+# Iteration 7 — Atlantic saga execution
+
+Date: **2026-10-18**. Run window (journal timestamps, UTC): first `INTENT`
+written `2026-10-17T21:29:30Z`, last step confirmed `2026-10-17T21:29:53Z` -
+all five transactions completed within that window. Status: **executed and
+confirmed on Atlantic testnet (chainId 688689)**. Nothing on mainnet, and no
+transaction has been signed or broadcast since.
+
+## 14.1 Authorization and pre-send gates
+
+The saga ran only through the gated runner, after the operator explicitly
+approved the reviewed plan hash. Every gate passed before the first signature:
+
+```text
+approved plan hash (--approve-plan): 8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f
+fresh hash at run time (rebuilt):    8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f  -> MATCH
+chainId:                             688689
+deployer:                            0xE2B8651178ade144003537eA509E37877dba40bb
+pending nonce before the run:        18
+gas price:                           10000000000 wei (10 gwei)
+PHRS balance before the run:         0.517903655838483504
+journal:                             .local/atlantic-saga/saga-journal.json
+```
+
+- `forge build --force` (WSL) succeeded; the freshly rebuilt plan core
+  serialized to exactly the approved hash, or the runner would have refused.
+- The Atlantic confirmation flag was required; the chain guard refused any
+  chain other than 688689.
+- Worst-case cost (840000 gas x 10 gwei = 0.0084 PHRS) was under the 0.02 PHRS
+  operator ceiling and covered by the balance.
+- Mint policy, exact branch: the tUSDC deployer balance was exactly `0`, so the
+  run sent `mint(deployer, 1000000)` - exactly 1.000000 tUSDC. The skip branch
+  was not taken; any other balance would have stopped the run before signing.
+- Deployed runtime code (immutables masked) and artifact hashes at all four
+  deployment-journal addresses were re-verified; wiring getters (`quote`,
+  `feeBps`, minter, controllers) were re-checked; the official USDC guard was
+  loaded read-only (deployer baseline 20.000000, which must remain unchanged).
+- The signing key was read from the env file only after every gate passed,
+  immediately before the first send, and is never printed or journaled.
+
+Only the five reviewed steps ran, and only against the four `TestOnly*`
+contracts.
+
+## 14.2 The five transactions
+
+Targets (test-only mocks deployed for this exercise; the mock swap and mock
+vault are **not production protocols**, and tUSDC is **not** official USDC):
+
+| Contract | Address |
+| --- | --- |
+| `TestOnlyUSDC` (tUSDC, test-only mock token) | `0x623F3575241827eb5aAb5592834632Ed67BB114C` |
+| `TestOnlyReceiptToken` (tSAGA, test-only mock token) | `0xCA7c0D2474f3868bbBa0902d33918b35Dad90b19` |
+| `TestOnlySwap` (mock swap) | `0xcF74d803da1C57CeE6Bb727B9646fDb42126414D` |
+| `TestOnlyVault` (mock vault) | `0xa16085FFC63F3BaB3D2c26b22Dc44B7421cEB64b` |
+
+All five transactions (every receipt status is `success`; effective gas price
+10 gwei for all five; the explorer links are constructed from the transaction
+hashes - the run verified receipts by JSON-RPC, not via the explorer):
+
+| # | Step | Nonce | Transaction hash (explorer link) | Block | Gas used | Receipt | Journal |
+| ---: | --- | ---: | --- | ---: | ---: | --- | --- |
+| 1 | `MintTusdc` | 18 | [`0x04ef1fdc19cd67516543d3d20a90308bbc530d512ebd6b2635dabcb1e3b31826`](https://atlantic.pharosscan.xyz/tx/0x04ef1fdc19cd67516543d3d20a90308bbc530d512ebd6b2635dabcb1e3b31826) | 31550624 | 68339 | success | `CONFIRMED` |
+| 2 | `ApproveTusdcToSwap` | 19 | [`0x9f80a560a12f53828a2496afd465d753f2640f1eec879b4001111a3f29fcc633`](https://atlantic.pharosscan.xyz/tx/0x9f80a560a12f53828a2496afd465d753f2640f1eec879b4001111a3f29fcc633) | 31550628 | 46116 | success | `CONFIRMED` |
+| 3 | `SwapTusdcForReceipt` | 20 | [`0x2421f98dbc7b09d91bedf5eb8e469c529bf044d1f7f6713667f5a2d3234615e2`](https://atlantic.pharosscan.xyz/tx/0x2421f98dbc7b09d91bedf5eb8e469c529bf044d1f7f6713667f5a2d3234615e2) | 31550635 | 106280 | success | `CONFIRMED` |
+| 4 | `ApproveReceiptToVault` | 21 | [`0xdbff90bab93168e804e6c9bbf519be3a200fec94fd51ebc5fb1178baaba89fd5`](https://atlantic.pharosscan.xyz/tx/0xdbff90bab93168e804e6c9bbf519be3a200fec94fd51ebc5fb1178baaba89fd5) | 31550642 | 46139 | success | `CONFIRMED` |
+| 5 | `DepositReceiptToVault` | 22 | [`0x9d775fbc18be69719ae73818c8c2eefc29ddb2092ecae8f480eda9fd31803693`](https://atlantic.pharosscan.xyz/tx/0x9d775fbc18be69719ae73818c8c2eefc29ddb2092ecae8f480eda9fd31803693) | 31550646 | 98749 | success | `CONFIRMED` |
+
+`INTENT` was fsync-written before every send; exactly one send per step; no
+resends were needed; no `UNKNOWN` or `REVERTED` entry exists. Every mined
+transaction input re-hashed to its journaled calldata sha256 before acceptance:
+
+```text
+MintTusdc              0e5b386ed6337f155c40d68bfbcbac2faa4bf712c10231e1f7bbd31230c16096
+ApproveTusdcToSwap     567eaea931464b499d5a54a868823970706c47b45b5bc0eac9f219be52ca3269
+SwapTusdcForReceipt    66a57394f3b1916d4a8a7e5761731e127d951e2fbf66868c89a88d38e79655bd
+ApproveReceiptToVault  c8feceb07d1e6f90cd0c1fcffdd50c3c230fc37e1552d0dc3c0cb99767f5e922
+DepositReceiptToVault  52de68233080c98a23523a4a7f389046d9aa868c3386ba238092a31ffb8a1999
+```
+
+An independent read-only post-run check re-fetched all five transactions and
+receipts from chain and re-read every final postcondition: all matched
+(status `success`, sender = deployer, target = the expected contract, input
+hash match, full end-state battery below).
+
+## 14.3 Final verified state
+
+Re-read from chain after the run (read-only):
+
+| Check | Expected | Observed |
+| --- | --- | ---: |
+| `tUSDC.balanceOf(deployer)` | `0` | `0` |
+| `tUSDC.allowance(deployer, TestOnlySwap)` | `0` | `0` |
+| `tSAGA.balanceOf(deployer)` | `0` | `0` |
+| `tSAGA.allowance(deployer, TestOnlyVault)` | `0` | `0` |
+| `vault.sharesOf(deployer)` (vault shares) | `990000` | `990000` |
+| `vault.totalShares()` | `990000` | `990000` |
+| `tSAGA.balanceOf(vault)` (tSAGA held by the vault) | `990000` | `990000` |
+| `tSAGA.totalSupply()` | `990000` | `990000` |
+| `tUSDC.balanceOf(TestOnlySwap)` (tUSDC held by the swap) | `1000000` | `1000000` |
+| official USDC `balanceOf(deployer)` | `20000000` raw = 20.000000 USDC (unchanged) | `20000000` raw |
+
+- Pending nonce after the run: **23** (18 + 5). Exactly five transactions were
+  sent; nothing else.
+- Official USDC is the canonical testnet token
+  `0xcfC8330f4BCAB529c625D12781b1C19466A9Fc8B`; it was loaded read-only as a
+  guard, appears in no calldata, and its deployer balance is unchanged at
+  **20 USDC**. tUSDC and tSAGA are test-only mock tokens, not official USDC,
+  and only the four `TestOnly*` contracts were ever targeted.
+
+## 14.4 Gas and cost
+
+| Metric | Value |
+| --- | --- |
+| Total gas used (5 transactions) | **365623** (plan cap 840000) |
+| Effective gas price | 10 gwei (10000000000 wei) |
+| Total spent | **0.00365623 PHRS** (3656230000000000 wei; operator ceiling 0.02 PHRS) |
+| PHRS balance before the run | 0.517903655838483504 |
+| PHRS balance after the run | **0.514247425838483504** |
+| Pending nonce | 18 -> 23 |
+
+## 14.5 Classification (iteration 7)
+
+| Artifact | Classification |
+| --- | --- |
+| The five transactions above | **LIVE ATLANTIC TESTNET transactions (chainId 688689)** signed by the project deployer against **test-only mock contracts**; not mainnet; not production protocols |
+| `TestOnlySwap` / `TestOnlyVault` | **test-only mocks** - a mock swap and a mock vault, not a DEX and not a yield protocol |
+| tUSDC (`0x623F...114C`) / tSAGA (`0xCA7c...0b19`) | **test-only mock tokens**; distinct from official USDC |
+| Official USDC (`0xcfC8...Fc8B`) | **unchanged at 20 USDC**; read-only guard; never targeted |
+| `.local/atlantic-saga/saga-journal.json` | durable run record; public transaction metadata only (no keys) |
+| Mainnet transactions | **none** |
+| Local demos + Foundry results (sections 10-13) | LOCAL EVM on disposable chains; unchanged history |
+
+## 14.6 Verification runs (after this documentation change)
+
+No contract, plan or source file was modified for this record. The following
+were re-run after the documentation update (no Atlantic transaction was signed
+or broadcast by any of them):
+
+```text
+npm run verify: build exit 0; 103 tests, 103 pass, 0 fail, 0 skipped (~18.5 s); SAFETY GATE PASSED
+forge test -vv: 16 tests passed, 0 failed, 0 skipped (3 suites)
+npm run demo:saga-tooling: 81/81 checks, 8 scenarios PASS
+```
+
+`demo:saga-tooling` re-drove the same runner against disposable local Anvil
+chains only (chainId 31337/5, loopback): scenario A repeated the full happy
+path locally (5 confirmed local transactions, identical end-state battery),
+A2 re-proved the skip and never-resend semantics, and B/C/D/E/F/G re-proved
+every refusal and stop path.

@@ -7,24 +7,37 @@ This is the short path for reviewing the **Saga Executor** submission.
 > - **The demos are simulated.** They do not use a wallet, private key, RPC
 >   endpoint, signature, broadcast or real funds. Every receipt is branded
 >   `simulated: true` and uses a `sim_*` reference.
-> - **No live on-chain saga has executed.** There is no transaction hash to open
->   on an explorer, and none is claimed.
-> - The separate Atlantic testnet adapter is **read-only and blocked** at the
->   readiness stage: the wallet holds 20 test USDC, but no official Atlantic
->   router/vault exists and the plan is blocked at the spender check. See
+> - **A live on-chain saga has now executed - on Atlantic testnet only.** The
+>   approved saga plan
+>   `8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f` was
+>   executed on **Pharos Atlantic Testnet, chain ID 688689**, against the
+>   deployed `TestOnly*` mock contracts; **all five transactions were
+>   confirmed**. This is a testnet run using test-only contracts and tokens -
+>   not a mainnet deployment and not a production protocol execution.
+>   Transaction hashes, receipts, final postconditions and gas totals:
+>   [`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).
+> - The separate **official-protocol** Atlantic testnet adapter is still
+>   **read-only and blocked** at the readiness stage: the wallet holds 20 test
+>   USDC, but no officially documented Atlantic router/vault exists and that
+>   plan is blocked at the spender check. The executed saga above does not use
+>   this path; it targets the test-only mock contracts instead. See
 >   [`testnet-readiness.md`](testnet-readiness.md).
 > - **Test-only local validation was added.** Clearly labelled `TestOnly*` mock
 >   contracts and a disposable local Anvil chain (chainId 31337) run the real
->   executor with real local transactions (`npm run demo:local`). A six-scenario
->   safety check of the gated deployment runner (`npm run demo:deploy-tooling`)
->   runs on the same kind of throwaway chains. This is not Atlantic or mainnet
->   evidence.
-> - **An Atlantic deployment plan is prepared but not executed.** No `TestOnly*`
->   contract has been deployed to Atlantic; nothing was signed or broadcast.
->   The gated runner that would perform it exists, is locally tested, and has
->   never run against Atlantic. See
+>   executor with real local transactions (`npm run demo:local`). Safety checks
+>   of the gated deployment runner (`npm run demo:deploy-tooling`, six
+>   scenarios) and of the gated saga runner (`npm run demo:saga-tooling`, eight
+>   scenarios) run on the same kind of throwaway chains. This local validation
+>   is not Atlantic or mainnet evidence; the only live run is the test-only
+>   Atlantic execution above.
+> - **The Atlantic test-only deployment is executed.** The deployment plan
+>   (hash `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`)
+>   was approved and the gated deployment runner deployed the four `TestOnly*`
+>   mock contracts and the minter wiring - five transactions, all confirmed.
+>   The approved saga above then ran against them. See
+>   [`testnet-deployment-tooling.md`](testnet-deployment-tooling.md),
 >   [`testnet-deployment-plan.md`](testnet-deployment-plan.md) and
->   [`testnet-deployment-tooling.md`](testnet-deployment-tooling.md).
+>   [`testnet-saga-tooling.md`](testnet-saga-tooling.md).
 
 ## 1. Requirements
 
@@ -40,7 +53,7 @@ npm install
 ## 2. Five-minute reproduction
 
 ```powershell
-# 95 tests + build + static safety gate
+# 103 tests + build + static safety gate
 npm run verify
 
 # Success: APPROVE -> SWAP -> DEPOSIT
@@ -63,6 +76,10 @@ npm run demo:local
 # Optional gated deploy-tooling check (local chains only): 6 scenarios,
 # wrong-chain refusal, forced revert, ambiguous outcome, bytecode mismatch
 npm run demo:deploy-tooling
+
+# Optional gated saga-tooling check (local chains only): 8 scenarios,
+# plan-hash gate, INTENT journal, no resend, calldata-hash binding
+npm run demo:saga-tooling
 
 # Optional read-only Atlantic deployment plan (no signing, no broadcast)
 npm run testnet:deploy-plan -- --env-file <local-env> --address <wallet-address>
@@ -142,8 +159,9 @@ endpoint; installation is local via the `skills` CLI. See
 | Duplicate/idempotent execution | `test/persistence.test.ts` |
 | No blind retry of unknown outcome | `demo:unknown`, `test/failure.test.ts` |
 | Real transaction path (test-only local chain) | `npm run demo:local`, `contracts/test/*.t.sol`, `docs/local-anvil.md` |
-| Atlantic deployment prepared without sending | `npm run testnet:deploy-plan`, `docs/testnet-deployment-plan.md`, plan hash |
+| Atlantic test-only execution (deployment + saga, all confirmed) | `docs/verified-output.md` section 14, `docs/testnet-saga-tooling.md`, `docs/testnet-deployment-tooling.md` |
 | Gated deployment safety (plan-hash gate, INTENT journal, no resend, bytecode verification) | `npm run demo:deploy-tooling`, `docs/testnet-deployment-tooling.md` |
+| Gated saga safety (plan-hash gate, INTENT journal, no resend, calldata-hash binding) | `npm run demo:saga-tooling`, `docs/testnet-saga-tooling.md` |
 | Simulation honesty | `test/safety.test.ts`, `scripts/check-safety.mjs` |
 | Skill packaging | `SKILL.md`, `npx skills ... --list` |
 
@@ -151,18 +169,22 @@ endpoint; installation is local via the `skills` CLI. See
 
 ```text
 npm run verify
-95 tests, 95 pass, 0 fail
+103 tests, 103 pass, 0 fail
 SAFETY GATE PASSED
 exit code 0
 ```
 
 The original 61 simulation tests remain green; the suite later grew to 80 with
-the gated testnet adapter, then to 87 with local-anvil coverage, and to **95**
-with the deploy-tooling tests (8 new offline tests) while keeping every
-earlier test passing. On top of that: **16 Foundry tests** pass locally
-(7 saga + 8 authorization + 1 gas measurement), the **4-scenario local Anvil
-session** (`npm run demo:local`) passes, and the **6-scenario deploy-tooling
-check** (`npm run demo:deploy-tooling`) passes.
+the gated testnet adapter, then to 87 with local-anvil coverage, then to 95
+with the deploy-tooling tests, and to **103** with the saga-tooling tests
+(8 new offline tests), while keeping every earlier test passing. On top of
+that: **16 Foundry tests** pass locally (7 saga + 8 authorization + 1 gas
+measurement), the **4-scenario local Anvil session** (`npm run demo:local`)
+passes, the **6-scenario deploy-tooling check** (`npm run demo:deploy-tooling`)
+passes, and the **8-scenario saga-tooling check** (`npm run demo:saga-tooling`)
+passes. The executed test-only Atlantic run (five confirmed transactions) is
+recorded in
+[`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).
 
 ## 7. Submission status
 
@@ -172,11 +194,12 @@ check** (`npm run demo:deploy-tooling`) passes.
 | Simulation demos | all four PASS |
 | Skill packaging | validated; 1 skill discovered |
 | GitHub repo | **not published** (`api.github.com/repos/wyka0/pharos-saga-executor` → 404) |
-| Live on-chain saga | **none executed** (Atlantic swap/vault still missing) |
+| Live on-chain saga | **executed on Pharos Atlantic Testnet (chainId 688689)** - all five transactions confirmed; test-only contracts; see `verified-output.md` section 14 |
 | Test-only local chain validation | added and passing (chainId 31337, clearly labelled mocks) |
 | Foundry toolchain | available in WSL Ubuntu (1.2.3-stable), documented in `docs/local-anvil.md` |
-| Atlantic deployment plan | regenerated (v2), read-only, **not executed**; awaiting explicit hash approval |
-| Gated deployment tooling | implemented and locally tested (6/6 scenarios); **never executed against Atlantic** |
+| Atlantic test-only deployment | **executed** - four `TestOnly*` mock contracts + minter wiring deployed (five transactions, all confirmed) |
+| Gated deployment tooling | implemented and locally tested (6/6 scenarios); **executed against Atlantic** (deployment above) |
+| Gated saga tooling | implemented and locally tested (8 scenarios, 81 checks); **executed against Atlantic** (5/5 CONFIRMED) |
 | Video | optional, not produced |
 | Agent Arena submission | not submitted |
 
@@ -184,14 +207,22 @@ check** (`npm run demo:deploy-tooling`) passes.
 
 1. **GitHub publication** is required for the repository link. The local remote
    is configured but nothing has been pushed.
-2. **No live Atlantic proof link exists.** The live plan is blocked by the
-   missing official Atlantic router/vault; no tx hash is fabricated. The only
-   real transactions so far are on a disposable local Anvil chain.
-3. **Atlantic deployment is not approved.** The regenerated plan hash
-   `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806` requires
-   separate explicit approval. The gated deploy script now exists and passed
-   the local safety check, but it has never been run against Atlantic and will
-   refuse to send without the approval flag plus its own confirmation gate.
+2. **No officially documented Atlantic protocol exists.** No Atlantic
+   router/vault is listed by Pharos, so the official-protocol adapter plan
+   remains blocked at the spender check and no protocol proof link exists; no
+   tx hash is fabricated. The live evidence is the separately approved
+   test-only deployment and saga (chainId 688689) - see section 14 of
+   [`verified-output.md`](verified-output.md#iteration-7--atlantic-saga-execution).
+3. **Testnet-only scope.** The executed runs used `TestOnly*` mock contracts
+   and test tokens on Atlantic testnet; a mainnet deployment and a production
+   protocol execution remain out of scope and were never approved. (The
+   deployment plan
+   `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806` and the
+   saga plan
+   `8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f`
+   were explicitly approved and executed through their gated runners.)
 4. Optional +50 video is not produced.
 
-No deployment, push or Agent Arena submission was performed.
+No mainnet deployment, push or Agent Arena submission was performed; the only
+on-chain activity is the test-only Atlantic execution recorded in
+[`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).

@@ -5,7 +5,29 @@ Network: **Pharos Atlantic Testnet, chainId 688689**
 Wallet: **`0xE2B8651178ade144003537eA509E37877dba40bb`**
 Project: `C:\pharos-saga-executor`
 
-> ## Status: NOT APPROVED / NOT EXECUTED
+> ## Update (2026-10-18): test-only execution completed after this snapshot
+>
+> This page documents the **read-only phase** and is preserved as a historical
+> snapshot: statements below that say nothing was signed, broadcast or deployed
+> were accurate when written. Under separate explicit approval later on
+> 2026-10-17:
+>
+> - the four `TestOnly*` mock contracts and the minter wiring were deployed to
+>   **Pharos Atlantic Testnet, chain ID 688689** - five transactions, all
+>   confirmed (deployment journal:
+>   `.local/atlantic-deploy/deploy-journal.json`);
+> - the approved saga plan
+>   `8faa2e69e1d4caee46bcc03a7bb9a3bf3542209a5dd4155ae09d6c536faa720f` was
+>   executed against them - **all five transactions confirmed** (blocks
+>   31550624-31550646).
+>
+> This was a testnet run using **test-only contracts and test tokens** - not a
+> mainnet deployment and not a production protocol execution. Transaction
+> hashes, receipts, final postconditions and gas totals:
+> [`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).
+> Saga tooling details: [`testnet-saga-tooling.md`](testnet-saga-tooling.md).
+
+> ## Snapshot status (2026-10-17, read-only phase): NOT APPROVED / NOT EXECUTED - superseded, see the Update above
 >
 > This project has not signed, broadcast or confirmed any transaction.
 > The wallet was separately funded with **20 USDC** by an external testnet
@@ -101,7 +123,8 @@ Blocked reasons:
 ```
 
 The balance is no longer a blocker. The sole remaining blocker is the absence of
-a verified spender/protocol. No transaction was signed or broadcast.
+a verified spender/protocol. No transaction was signed or broadcast *(at this
+snapshot; superseded - see the Update at the top)*.
 
 ## 3. Live operations tested
 
@@ -114,8 +137,8 @@ a verified spender/protocol. No transaction was signed or broadcast.
 | USDC total supply | `100108237887829` raw |
 | Token balances | **20 USDC**; USDT/WBTC/WETH/WPHRS 0 |
 | Funding transaction | `0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b`, block 31543356, success, one `Transfer` log of 20 USDC to the wallet |
-| Transactions sent by this project | **None** |
-| Gas spent by this project | **0** |
+| Transactions sent by this project | **None** *(at this snapshot; superseded - see the Update at the top)* |
+| Gas spent by this project | **0** *(at this snapshot; superseded - see the Update at the top)* |
 
 Funding explorer link:
 <https://atlantic.pharosscan.xyz/tx/0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b>
@@ -214,11 +237,14 @@ approval-gate, on-chain receipt, journal and safety-isolation tests.
 
 1. **No live saga operation was possible.** The wallet has gas and 20 test USDC,
    but no verified swap/deposit protocol exists, so the plan remains
-   non-executable.
+   non-executable. *(Snapshot: a separate test-only saga against mock contracts
+   was later executed - see the Update at the top.)*
 2. **No transaction plan is executable.** The plan contains zero transactions and
    `executable=false`.
-3. **No deployment was performed.** Deploying a test-only DEX/vault would require
-   a separate explicit approval and is outside this task.
+3. **No deployment was performed** *(at this snapshot; the separately approved
+   test-only deployment followed - see the Update at the top)*. Deploying a
+   test-only DEX/vault would require a separate explicit approval and is outside
+   this task.
 4. **Unknown outcomes require manual recovery.** The adapter never resubmits.
 5. **The testnet journal is single-process.** Cross-process concurrent writers are
    not supported.
@@ -239,6 +265,10 @@ Result: **PASS** — TypeScript build, 95/95 tests, and the static safety gate
 
 ## 10. What is required next
 
+> *Snapshot (2026-10-17): option 2 below was subsequently taken - the test-only
+> contracts were deployed and the approved saga was executed. See the Update at
+> the top and [`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).*
+
 To proceed beyond readiness, one of these must happen with explicit approval:
 
 1. **Provide a verified protocol.** A documented Atlantic swap/router and
@@ -250,12 +280,14 @@ To proceed beyond readiness, one of these must happen with explicit approval:
 Only then can `testnet:plan` produce an executable plan. That plan must be
 reviewed (network, addresses, token amount, allowance, calldata, gas, maximum
 cost, postconditions) and its exact hash approved before `testnet:run` may sign
-or broadcast. No such approval exists yet.
+or broadcast. No such approval existed yet (the later test-only runs used
+separate plans - see the Update at the top).
 
-## 11. Test-only deployment plan (PREPARED, NOT EXECUTED)
+## 11. Test-only deployment plan (prepared here; executed later - see the Update at the top)
 
-The plan originally proposed here has been **prepared in full, compiled and
-locally validated**, but still **not executed**. The current state:
+The plan proposed here was **prepared in full, compiled and locally validated**,
+but at the time of writing it had **not yet been executed**. The state at the
+time of writing:
 
 - Foundry was found and used in **WSL Ubuntu** (`/home/wyka/.foundry/bin`,
   version 1.2.3-stable); it was not installed on the Windows side.
@@ -271,9 +303,10 @@ locally validated**, but still **not executed**. The current state:
   `REVOKE_APPROVAL`, forced DEPOSIT revert with `SIMULATED_UNWIND_SWAP`, and an
   unknown SWAP outcome reconciled without resubmission. See
   [local-anvil.md](local-anvil.md).
-- A **gated deployment runner** for the Atlantic run is implemented and passed
-  a six-scenario local safety check (`npm run demo:deploy-tooling`); it has
-  never been executed against Atlantic. See
+- A **gated deployment runner** for the Atlantic run was implemented and passed
+  a six-scenario local safety check (`npm run demo:deploy-tooling`); at the
+  time of writing it had not yet run against Atlantic (it was later executed -
+  see the Update at the top). See
   [testnet-deployment-tooling.md](testnet-deployment-tooling.md).
 - A **read-only Atlantic deployment plan** was regenerated from live chain
   state after the contract hardening:
@@ -293,10 +326,12 @@ locally validated**, but still **not executed**. The current state:
 | Test-only contracts, clearly named | Done (`contracts/test-only/`, labelled in code and docs) |
 | No mainnet / no real funds | Enforced (chain guards; safety gate) |
 | No unlimited approvals | Exact, bounded allowances only |
-| Exact plan hash approval before signing | Plan hash produced; **no approval requested yet; nothing signed** |
+| Exact plan hash approval before signing | Plan hash produced; no approval requested yet and nothing signed at the time of writing (later approved and executed - see the Update at the top) |
 | No blind resend after unknown | Proven on local Anvil (`sendCount` unchanged after reconcile) |
 
-### What is still required before Atlantic deployment
+### What was still required before Atlantic deployment
+
+*(As of this snapshot; completed later.)*
 
 1. Explicit user approval of the exact plan hash above.
 2. Review of the plan document, including constructor arguments, gas caps,
@@ -306,8 +341,12 @@ locally validated**, but still **not executed**. The current state:
    [testnet-deployment-tooling.md](testnet-deployment-tooling.md)): it
    force-rebuilds and re-verifies artifact hashes, journals INTENT before every
    send, never resends an ambiguous outcome, and verifies receipts, bytecode
-   and addresses. The script now exists and passed its local safety check, but
-   it has never run against Atlantic.
+   and addresses. The script exists and passed its local safety check, but at
+   the time of writing it had not yet run against Atlantic.
 
-No `TestOnly*` contract has been deployed to Atlantic. No transaction has been
-sent by this project.
+*(Snapshot, 2026-10-17: at that point no `TestOnly*` contract had been deployed
+to Atlantic and no transaction had been sent by this project. Later that day,
+under separate explicit approval, the deployment and the approved saga were
+executed - five deployment transactions and five saga transactions, all
+confirmed. See the Update at the top and
+[`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).)*

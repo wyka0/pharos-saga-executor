@@ -1,6 +1,21 @@
-# Atlantic Testnet Deployment Plan (Prepared, NOT Executed)
+# Atlantic Testnet Deployment Plan (prepared for review; executed 2026-10-17)
 
-**Status: PREPARED FOR REVIEW. NOTHING WAS SIGNED OR BROADCAST.**
+> **Update (2026-10-18): executed.** This plan was explicitly approved and the
+> gated runner deployed all five transactions to Pharos Atlantic testnet
+> (chainId 688689) on 2026-10-17 - every one **CONFIRMED** (plan hash
+> `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`;
+> deployment journal `.local/atlantic-deploy/deploy-journal.json`; total gas
+> used 2,471,030 = 0.0247103 PHRS at 10 gwei). The deployed addresses are the
+> ones recorded in section 4, and the five-step saga ran against these
+> contracts - see
+> [verified-output.md section 14](verified-output.md#iteration-7--atlantic-saga-execution)
+> and [testnet-saga-tooling.md](testnet-saga-tooling.md). Test-only mocks only:
+> `TestOnlyUSDC`/`TestOnlyReceiptToken` (tUSDC/tSAGA) are not the official USDC
+> (`0xcfC8...Fc8B`), which was never targeted; the official-protocol adapter
+> path remains blocked. Everything below is the historical pre-execution plan
+> and its original output, preserved as written.
+
+**Status at time of writing (2026-10-17): PREPARED FOR REVIEW. NOTHING HAD BEEN SIGNED OR BROADCAST AT THAT POINT.**
 **Classification: TEST-ONLY MOCK CONTRACTS on Pharos Atlantic testnet (chainId 688689).
 Not a Pharos protocol, not mainnet, no real funds.**
 
@@ -77,7 +92,13 @@ immutable controller; the swap itself can never wire its own minter.
 - At 10 gwei this caps the spend at **0.034 PHRS**; the operator ceiling is
   **0.05 PHRS** regardless of gas-price movement.
 
-## 4. Intended addresses (predicted, not final)
+## 4. Intended addresses (predicted at plan time; deployed as predicted)
+
+> **Update (2026-10-18):** the run executed with pending nonce 13 as planned
+> and the predictions below are now the **deployed addresses** (recorded in
+> `.local/atlantic-deploy/deploy-journal.json`). The caveat paragraph below
+> applied only until execution; see
+> [verified-output.md section 14](verified-output.md#iteration-7--atlantic-saga-execution).
 
 `CREATE` addresses are deterministic from the deployer and nonce at execution
 time. With pending nonce 13 at plan time they would be:
@@ -111,7 +132,10 @@ must be re-requested. The gated runner re-derives this hash from freshly
 rebuilt artifacts and refuses to send anything unless it matches the approved
 value exactly.
 
-## 6. Preconditions for a future execution task (not yet done)
+## 6. Preconditions for the execution task (all satisfied; executed 2026-10-17)
+
+> **Update (2026-10-18):** every precondition below was satisfied and the run
+> executed; the checklist is preserved as the pre-execution record.
 
 Deployment may only be attempted after all of the following:
 

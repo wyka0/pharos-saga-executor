@@ -82,6 +82,15 @@ const required = [
   'scripts/testnet-deploy.ts',
   'scripts/local-deploy-check.ts',
   'test/deploy-tooling.test.ts',
+  'src/testnet/sagaPlan.ts',
+  'src/testnet/saga/runner.ts',
+  'src/testnet/saga/verify.ts',
+  'src/testnet/saga/journal.ts',
+  'scripts/testnet-saga.ts',
+  'scripts/testnet-saga-plan.ts',
+  'scripts/local-saga-check.ts',
+  'test/saga-tooling.test.ts',
+  'docs/testnet-saga-tooling.md',
 ];
 for (const relative of required) {
   check(existsSync(path.join(ROOT, relative)), `required file exists: ${relative}`);
@@ -97,12 +106,19 @@ const localOnlyFiles = new Set([
   path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
   path.join(ROOT, 'scripts', 'local-anvil.ts'),
   path.join(ROOT, 'scripts', 'local-deploy-check.ts'),
+  path.join(ROOT, 'scripts', 'local-saga-check.ts'),
 ]);
 
-const testnetReadOnlyFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts')]);
+const testnetReadOnlyFiles = new Set([
+  path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts'),
+  path.join(ROOT, 'scripts', 'testnet-saga-plan.ts'),
+]);
 
-/** The gated deployment CLI is the only script allowed to send (atlantic mode). */
-const testnetSendFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy.ts')]);
+/** The gated deployment and saga CLIs are the only scripts allowed to send. */
+const testnetSendFiles = new Set([
+  path.join(ROOT, 'scripts', 'testnet-deploy.ts'),
+  path.join(ROOT, 'scripts', 'testnet-saga.ts'),
+]);
 
 const simulationFiles = allTs.filter(
   (file) =>
@@ -221,6 +237,49 @@ check(
 );
 check(deployCli.includes('--approve-plan'), 'deploy CLI requires an approved plan hash');
 check(/keyProvider/.test(deployCli), 'deploy CLI reads the signing key lazily at first send');
+
+const sagaPlanScript = readFileSync(path.join(ROOT, 'scripts', 'testnet-saga-plan.ts'), 'utf8');
+check(
+  !/sendTransaction|writeContract|deployContract|sendRawTransaction/.test(sagaPlanScript),
+  'saga plan script has no send/sign/broadcast path',
+);
+check(
+  !/PRIVATE_KEY|privateKey|mnemonic/.test(sagaPlanScript),
+  'saga plan script never references signing secrets',
+);
+
+const sagaCore = readFileSync(path.join(ROOT, 'src', 'testnet', 'sagaPlan.ts'), 'utf8');
+check(sagaCore.includes('ATLANTIC_CHAIN_ID'), 'saga plan core is pinned to the Atlantic chainId');
+check(
+  !/sendTransaction|writeContract|deployContract|sendRawTransaction|privateKey|PRIVATE_KEY|mnemonic/.test(
+    sagaCore,
+  ),
+  'saga plan core has no send/sign/secret path',
+);
+const sagaRunner = readFileSync(path.join(ROOT, 'src', 'testnet', 'saga', 'runner.ts'), 'utf8');
+check(sagaRunner.includes('INTENT'), 'saga runner journals INTENT before sending');
+check(sagaRunner.includes('SAGA_CEILING_WEI'), 'saga runner enforces the saga PHRS ceiling');
+check(
+  /confirmAtlanticTestnet/.test(sagaRunner),
+  'saga runner requires the explicit Atlantic confirmation flag',
+);
+check(/verifyRuntimeCode/.test(sagaRunner), 'saga runner verifies deployed runtime code');
+check(sagaRunner.includes('dataSha256'), 'saga runner binds the journaled calldata hash');
+check(sagaRunner.includes('officialUsdc'), 'saga runner keeps the official USDC guard');
+check(
+  /resent/.test(sagaRunner) && sagaRunner.includes('UNKNOWN') && sagaRunner.includes('REVERTED'),
+  'saga runner marks ambiguous/reverted outcomes and never resends',
+);
+const sagaJournalText = readFileSync(path.join(ROOT, 'src', 'testnet', 'saga', 'journal.ts'), 'utf8');
+check(sagaJournalText.includes("'INTENT'"), 'saga journal defines the INTENT status');
+const sagaCli = readFileSync(path.join(ROOT, 'scripts', 'testnet-saga.ts'), 'utf8');
+check(
+  sagaCli.includes('--confirm-atlantic-testnet'),
+  'saga CLI requires --confirm-atlantic-testnet for atlantic mode',
+);
+check(sagaCli.includes('--approve-plan'), 'saga CLI requires an approved plan hash');
+check(/keyProvider/.test(sagaCli), 'saga CLI reads the signing key lazily at first send');
+check(sagaCli.includes('deployJournalPath'), 'saga CLI resolves addresses from the deployment journal');
 
 const localFiles = [...localOnlyFiles].filter((file) => existsSync(file));
 let localHits = 0;
