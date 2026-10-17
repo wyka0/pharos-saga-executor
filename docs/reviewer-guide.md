@@ -13,8 +13,13 @@ This is the short path for reviewing the **Saga Executor** submission.
 >   readiness stage: the wallet holds 20 test USDC, but no official Atlantic
 >   router/vault exists and the plan is blocked at the spender check. See
 >   [`testnet-readiness.md`](testnet-readiness.md).
-> - No mock contracts, Foundry project, local chain, deployment or broadcast was
->   added for this submission.
+> - **Test-only local validation was added.** Clearly labelled `TestOnly*` mock
+>   contracts and a disposable local Anvil chain (chainId 31337) run the real
+>   executor with real local transactions (`npm run demo:local`). This is not
+>   Atlantic or mainnet evidence.
+> - **An Atlantic deployment plan is prepared but not executed.** No `TestOnly*`
+>   contract has been deployed to Atlantic; nothing was signed or broadcast. See
+>   [`testnet-deployment-plan.md`](testnet-deployment-plan.md).
 
 ## 1. Requirements
 
@@ -30,7 +35,7 @@ npm install
 ## 2. Five-minute reproduction
 
 ```powershell
-# 80 tests + build + static safety gate
+# 87 tests + build + static safety gate
 npm run verify
 
 # Success: APPROVE -> SWAP -> DEPOSIT
@@ -45,6 +50,13 @@ npm run demo:manual
 
 # Unknown submission outcome -> no retry, no compensation, manual recovery
 npm run demo:unknown
+
+# Optional test-only local chain validation (requires Foundry in WSL):
+# real local transactions, 4 scenarios, chainId 31337 only
+npm run demo:local
+
+# Optional read-only Atlantic deployment plan (no signing, no broadcast)
+npm run testnet:deploy-plan -- --env-file <local-env> --address <wallet-address>
 ```
 
 Expected terminal states:
@@ -120,6 +132,8 @@ endpoint; installation is local via the `skills` CLI. See
 | Persistence/resume | `test/persistence.test.ts` |
 | Duplicate/idempotent execution | `test/persistence.test.ts` |
 | No blind retry of unknown outcome | `demo:unknown`, `test/failure.test.ts` |
+| Real transaction path (test-only local chain) | `npm run demo:local`, `contracts/test/*.t.sol`, `docs/local-anvil.md` |
+| Atlantic deployment prepared without sending | `npm run testnet:deploy-plan`, `docs/testnet-deployment-plan.md`, plan hash |
 | Simulation honesty | `test/safety.test.ts`, `scripts/check-safety.mjs` |
 | Skill packaging | `SKILL.md`, `npx skills ... --list` |
 
@@ -127,24 +141,29 @@ endpoint; installation is local via the `skills` CLI. See
 
 ```text
 npm run verify
-80 tests, 80 pass, 0 fail
+87 tests, 87 pass, 0 fail
 SAFETY GATE PASSED
 exit code 0
 ```
 
-The original 61 simulation tests remain green; 19 tests were added for the gated
-testnet adapter and safety isolation.
+The original 61 simulation tests remain green; the suite later grew to 80 with
+the gated testnet adapter, then to **87** with local-anvil coverage (6 offline
+local tests, 1 additional isolation test) while keeping every earlier test
+passing. On top of that: **8 Foundry tests** pass locally and the **4-scenario
+local Anvil session** (`npm run demo:local`) passes.
 
 ## 7. Submission status
 
 | Item | Status |
 | --- | --- |
-| Code and tests | complete locally, clean tree |
+| Code and tests | complete locally |
 | Simulation demos | all four PASS |
 | Skill packaging | validated; 1 skill discovered |
 | GitHub repo | **not published** (`api.github.com/repos/wyka0/pharos-saga-executor` → 404) |
-| Live on-chain saga | **none executed** |
-| Foundry/mock contracts/local chain | **not added** (per instruction) |
+| Live on-chain saga | **none executed** (Atlantic swap/vault still missing) |
+| Test-only local chain validation | added and passing (chainId 31337, clearly labelled mocks) |
+| Foundry toolchain | available in WSL Ubuntu (1.2.3-stable), documented in `docs/local-anvil.md` |
+| Atlantic deployment plan | prepared, read-only, **not executed**; awaiting explicit hash approval |
 | Video | optional, not produced |
 | Agent Arena submission | not submitted |
 
@@ -152,9 +171,12 @@ testnet adapter and safety isolation.
 
 1. **GitHub publication** is required for the repository link. The local remote
    is configured but nothing has been pushed.
-2. **No live proof link exists.** This submission is explicitly simulation-only;
-   no tx hash is fabricated. The testnet plan is blocked by missing test tokens
-   and missing official Atlantic protocols.
-3. Optional +50 video is not produced.
+2. **No live Atlantic proof link exists.** The live plan is blocked by the
+   missing official Atlantic router/vault; no tx hash is fabricated. The only
+   real transactions so far are on a disposable local Anvil chain.
+3. **Atlantic deployment is not approved.** The plan hash
+   `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691` requires
+   separate explicit approval, and a reviewed deploy script does not exist yet.
+4. Optional +50 video is not produced.
 
 No deployment, push or Agent Arena submission was performed.

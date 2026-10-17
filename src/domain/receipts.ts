@@ -176,6 +176,52 @@ function onChainReasons(
   return reasons;
 }
 
+function localReasons(
+  receipt: Record<string, unknown>,
+  record: SagaRecord,
+  expected: {
+    receiptKind: 'STEP' | 'COMPENSATION';
+    operation: ProofReceipt['operation'];
+    stepId: string;
+    idempotencyKey: string;
+  },
+): string[] {
+  const reasons = identityReasons(receipt, record, expected);
+  if (receipt.simulated !== false) reasons.push('local receipt must have simulated: false');
+  if (receipt.network !== 'local-anvil') reasons.push('local receipt network must be local-anvil');
+  if (receipt.chainId !== 31337) reasons.push('local receipt chainId must be 31337');
+  if (!txHash(receipt.txHash)) reasons.push('local receipt txHash must be a 32-byte hash');
+  if (!positiveInteger(receipt.blockNumber)) reasons.push('receipt.blockNumber must be positive');
+  if (typeof receipt.blockHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(receipt.blockHash)) {
+    reasons.push('receipt.blockHash must be a 32-byte hash');
+  }
+  if (receipt.status !== 'SUCCESS') reasons.push('local receipt status must be SUCCESS');
+  if (
+    typeof receipt.confirmations !== 'number' ||
+    !Number.isInteger(receipt.confirmations) ||
+    receipt.confirmations < 1
+  ) {
+    reasons.push('local receipt must have at least one confirmation');
+  }
+  if (!address(receipt.from)) reasons.push('receipt.from must be an address');
+  if (!address(receipt.to)) reasons.push('receipt.to must be an address');
+  if (receipt.explorerUrl !== null) {
+    reasons.push('local receipt must not claim an explorer link (explorerUrl must be null)');
+  }
+  if (typeof receipt.disclaimer !== 'string' || !/LOCAL ANVIL|TEST-ONLY/i.test(receipt.disclaimer)) {
+    reasons.push('local receipt must state that it is local test-only evidence');
+  }
+  if (!positiveInteger(receipt.gasUsed)) reasons.push('receipt.gasUsed must be positive');
+  if (typeof receipt.effectiveGasPrice !== 'string' || !/^\d+$/.test(receipt.effectiveGasPrice)) {
+    reasons.push('receipt.effectiveGasPrice must be an integer string');
+  }
+  if (!Array.isArray(receipt.postconditions) || receipt.postconditions.length === 0) {
+    reasons.push('local receipt must include at least one postcondition');
+  }
+  if ('simulatedTxRef' in receipt) reasons.push('local receipt must not contain simulatedTxRef');
+  return reasons;
+}
+
 function stepResultReasons(
   receipt: Record<string, unknown>,
   record: SagaRecord,
@@ -232,7 +278,9 @@ export function verifyStepReceipt(
   const reasons =
     receipt.simulated === true
       ? simulatedReasons(receipt, record, expected)
-      : onChainReasons(receipt, record, expected);
+      : receipt.network === 'local-anvil'
+        ? localReasons(receipt, record, expected)
+        : onChainReasons(receipt, record, expected);
   reasons.push(...stepResultReasons(receipt, record, step));
 
   if (reasons.length > 0) return { ok: false, reasons };
@@ -258,7 +306,9 @@ export function verifyCompensationReceipt(
   const reasons =
     receipt.simulated === true
       ? simulatedReasons(receipt, record, expected)
-      : onChainReasons(receipt, record, expected);
+      : receipt.network === 'local-anvil'
+        ? localReasons(receipt, record, expected)
+        : onChainReasons(receipt, record, expected);
 
   if (receipt.compensatesStep !== compensatesStep) {
     reasons.push(`compensation must name the original failed step (${compensatesStep})`);

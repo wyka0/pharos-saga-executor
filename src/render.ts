@@ -4,11 +4,17 @@ const SIMULATED_DISCLAIMER =
   'SIMULATED ADAPTER - NO WALLET, RPC, SIGNATURE, BROADCAST OR ON-CHAIN TRANSACTION WAS USED.';
 const TESTNET_DISCLAIMER =
   'REAL PHAROS ATLANTIC TESTNET (chainId 688689) - TESTNET FUNDS ONLY. NOT MAINNET.';
+const LOCAL_DISCLAIMER =
+  'LOCAL ANVIL TEST-ONLY CHAIN (chainId 31337) - NO ATLANTIC OR MAINNET TRANSACTION.';
 
 function receiptLabel(receipt: ProofReceipt): string {
-  return receipt.simulated
-    ? `receipt=${receipt.simulatedTxRef} (SIMULATED)`
-    : `tx=${receipt.txHash} block=${receipt.blockNumber} (ATLANTIC TESTNET)`;
+  if (receipt.simulated) {
+    return `receipt=${receipt.simulatedTxRef} (SIMULATED)`;
+  }
+  if (receipt.network === 'local-anvil') {
+    return `tx=${receipt.txHash} block=${receipt.blockNumber} (LOCAL ANVIL TEST-ONLY)`;
+  }
+  return `tx=${receipt.txHash} block=${receipt.blockNumber} (ATLANTIC TESTNET)`;
 }
 
 function line(char = '='): string {
@@ -52,7 +58,11 @@ export function formatSaga(record: SagaRecord): string {
   lines.push(line());
   lines.push(`SAGA ${record.id}`);
   lines.push(
-    record.config.adapterId === 'simulated' ? SIMULATED_DISCLAIMER : TESTNET_DISCLAIMER,
+    record.config.adapterId === 'simulated'
+      ? SIMULATED_DISCLAIMER
+      : record.config.adapterId === 'local-anvil'
+        ? LOCAL_DISCLAIMER
+        : TESTNET_DISCLAIMER,
   );
   lines.push(line());
   lines.push(`State:       ${record.state}`);
@@ -82,7 +92,9 @@ export function formatSaga(record: SagaRecord): string {
   lines.push(
     record.config.adapterId === 'simulated'
       ? 'Evidence:    SIMULATED receipts only; no transaction hash, no explorer link, no on-chain confirmation.'
-      : 'Evidence:    real Atlantic testnet receipts with transaction hashes and explorer links.',
+      : record.config.adapterId === 'local-anvil'
+        ? 'Evidence:    real LOCAL ANVIL transactions with hashes; no explorer link; test-only chain.'
+        : 'Evidence:    real Atlantic testnet receipts with transaction hashes and explorer links.',
   );
   lines.push('');
   lines.push('STEPS (stable IDs and idempotency keys)');
@@ -130,7 +142,9 @@ export function formatSaga(record: SagaRecord): string {
   lines.push(
     record.config.adapterId === 'simulated'
       ? 'Reminder: simulated receipts are NOT live blockchain evidence.'
-      : 'Reminder: TESTNET ONLY. Never treat this as mainnet evidence or real-fund activity.',
+      : record.config.adapterId === 'local-anvil'
+        ? 'Reminder: LOCAL ANVIL TEST-ONLY. This is not Atlantic testnet or mainnet evidence.'
+        : 'Reminder: TESTNET ONLY. Never treat this as mainnet evidence or real-fund activity.',
   );
   lines.push(line());
   return `${lines.join('\n')}\n`;

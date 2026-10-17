@@ -12,3 +12,6 @@ state/
 *.tmp
 .DS_Store
 Thumbs.db
+out/
+cache/
+broadcast/

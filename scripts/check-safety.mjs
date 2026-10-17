@@ -51,14 +51,28 @@ const required = [
   'src/adapters/types.ts',
   'src/adapters/simulated.ts',
   'src/adapters/pharosTestnet.ts',
+  'src/adapters/localAnvil.ts',
   'src/testnet/config.ts',
   'src/testnet/viemTestnetClient.ts',
   'src/persistence/store.ts',
   'src/persistence/testnetJournal.ts',
+  'src/persistence/localJournal.ts',
   'scripts/demo-success.ts',
   'scripts/demo-failure.ts',
+  'scripts/local-anvil.ts',
+  'scripts/testnet-deploy-plan.ts',
   'test/state-machine.test.ts',
   'test/testnet.test.ts',
+  'test/local-anvil.test.ts',
+  'foundry.toml',
+  'contracts/test-only/TestOnlyERC20.sol',
+  'contracts/test-only/TestOnlyTokens.sol',
+  'contracts/test-only/TestOnlySwap.sol',
+  'contracts/test-only/TestOnlyVault.sol',
+  'contracts/test/TestOnlySaga.t.sol',
+  'contracts/test/DeploymentGas.t.sol',
+  'docs/local-anvil.md',
+  'docs/testnet-deployment-plan.md',
 ];
 for (const relative of required) {
   check(existsSync(path.join(ROOT, relative)), `required file exists: ${relative}`);
@@ -69,11 +83,21 @@ const allTs = [
   ...walk(path.join(ROOT, 'scripts')),
 ].filter((file) => file.endsWith('.ts'));
 
+const localOnlyFiles = new Set([
+  path.join(ROOT, 'src', 'adapters', 'localAnvil.ts'),
+  path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
+  path.join(ROOT, 'scripts', 'local-anvil.ts'),
+]);
+
+const testnetReadOnlyFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts')]);
+
 const simulationFiles = allTs.filter(
   (file) =>
     !file.includes(`${path.sep}testnet${path.sep}`) &&
     !file.endsWith(`${path.sep}pharosTestnet.ts`) &&
-    !file.endsWith(`${path.sep}viemTestnetClient.ts`),
+    !file.endsWith(`${path.sep}viemTestnetClient.ts`) &&
+    !localOnlyFiles.has(file) &&
+    !testnetReadOnlyFiles.has(file),
 );
 const simulationForbidden = [
   'PRIVATE_KEY',
@@ -116,6 +140,7 @@ if (simulationHits === 0) {
 const testnetFiles = [
   ...walk(path.join(ROOT, 'src', 'testnet')),
   path.join(ROOT, 'src', 'adapters', 'pharosTestnet.ts'),
+  ...testnetReadOnlyFiles,
 ].filter((file) => file.endsWith('.ts'));
 let testnetHits = 0;
 for (const file of testnetFiles) {
@@ -134,6 +159,41 @@ for (const file of testnetFiles) {
 if (testnetHits === 0) {
   pass(`${testnetFiles.length} testnet files are isolated from mainnet and contain no key literals`);
 }
+const deployPlanPath = path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts');
+const deployPlan = readFileSync(deployPlanPath, 'utf8');
+check(
+  !/sendTransaction|writeContract|deployContract|sendRawTransaction/.test(deployPlan),
+  'deployment plan script has no send/sign/broadcast path',
+);
+check(
+  !/PRIVATE_KEY|privateKey|mnemonic/.test(deployPlan),
+  'deployment plan script never references signing secrets',
+);
+
+const localFiles = [...localOnlyFiles].filter((file) => existsSync(file));
+let localHits = 0;
+for (const file of localFiles) {
+  const text = readFileSync(file, 'utf8');
+  for (const forbidden of ['rpc.pharos.xyz', 'atlantic.pharosscan', '688689', 'mainnet.pharos', '1672']) {
+    if (text.includes(forbidden)) {
+      localHits += 1;
+      fail(`${path.relative(ROOT, file)} must never target Atlantic or mainnet (${forbidden})`);
+    }
+  }
+}
+if (localHits === 0) {
+  pass(`${localFiles.length} local-anvil files contain no Atlantic/mainnet target`);
+}
+const sagaText = readFileSync(path.join(ROOT, 'src', 'domain', 'saga.ts'), 'utf8');
+check(
+  sagaText.includes("'127.0.0.1'") && sagaText.includes('31337'),
+  'local config validation only allows localhost endpoints on chainId 31337',
+);
+const foundryToml = readFileSync(path.join(ROOT, 'foundry.toml'), 'utf8');
+check(
+  foundryToml.includes('http://127.0.0.1:8545') && !foundryToml.includes('688689'),
+  'foundry.toml declares only a local RPC endpoint',
+);
 
 const manifest = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 check(
@@ -145,7 +205,7 @@ for (const banned of ['ethers', 'web3', 'wagmi', 'hardhat']) {
 }
 
 const ignore = readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
-for (const pattern of ['node_modules/', 'state/', '.demo-state/', '.env', '.local/', 'dist/']) {
+for (const pattern of ['node_modules/', 'state/', '.demo-state/', '.env', '.local/', 'dist/', 'out/', 'cache/']) {
   check(ignore.includes(pattern), `.gitignore covers ${pattern}`);
 }
 check(!existsSync(path.join(ROOT, '.env')), 'no .env file exists');

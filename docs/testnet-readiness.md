@@ -268,3 +268,26 @@ A second read-only pass after the funding transfer confirmed:
 
 Until 1–3 are resolved, no live APPROVE/SWAP/DEPOSIT is proposed. The adapter
 reports the missing prerequisite instead of faking a transaction.
+
+## 11. Update (Task 5 continuation): Foundry found, local validation and plan prepared
+
+The earlier "tooling blocker" is resolved and item 3 above is partially
+progressed, still **without any Atlantic transaction**:
+
+- **Foundry was found in WSL Ubuntu** (`/home/wyka/.foundry/bin`, version
+  1.2.3-stable: `forge`, `anvil`, `cast`). It was never on the Windows side.
+  No PATH or shell profile was changed.
+- **Test-only contracts exist and compile**: `contracts/test-only/`
+  (`TestOnlyUSDC`, `TestOnlyReceiptToken`, `TestOnlySwap`, `TestOnlyVault`),
+  plus 8 passing Foundry tests including a deployment-gas measurement.
+- **Local end-to-end validation passed** on a disposable Anvil chain
+  (chainId 31337): success, forced SWAP revert with `REVOKE_APPROVAL`, forced
+  DEPOSIT revert with `SIMULATED_UNWIND_SWAP`, and unknown-outcome
+  reconciliation with no resubmission (`npm run demo:local`).
+- **Atlantic deployment plan prepared (read-only, NOT executed)**:
+  [`testnet-deployment-plan.md`](testnet-deployment-plan.md), plan hash
+  `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691`,
+  2,800,000 total gas cap, 0.028 PHRS planned spend at 10 gwei.
+
+No `TestOnly*` contract has been deployed to Atlantic. Deployment remains a
+separate, explicitly approved task; see the plan document for preconditions.

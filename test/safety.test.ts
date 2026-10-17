@@ -25,11 +25,19 @@ test('executable simulation source contains no wallet, signing, RPC or network s
     ...(await listFiles(path.join(ROOT, 'src'))),
     ...(await listFiles(path.join(ROOT, 'scripts'))),
   ].filter((file) => file.endsWith('.ts'));
+  const localOnlyFiles = new Set([
+    path.join(ROOT, 'src', 'adapters', 'localAnvil.ts'),
+    path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
+    path.join(ROOT, 'scripts', 'local-anvil.ts'),
+  ]);
+  const testnetReadOnlyFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts')]);
   const simulationFiles = allFiles.filter(
     (file) =>
       !file.includes(`${path.sep}testnet${path.sep}`) &&
       !file.endsWith(`${path.sep}pharosTestnet.ts`) &&
-      !file.endsWith(`${path.sep}viemTestnetClient.ts`),
+      !file.endsWith(`${path.sep}viemTestnetClient.ts`) &&
+      !localOnlyFiles.has(file) &&
+      !testnetReadOnlyFiles.has(file),
   );
   assert.ok(simulationFiles.length >= 20);
 
@@ -70,6 +78,7 @@ test('testnet adapter is isolated from mainnet and never targets rpc.pharos.xyz'
   const testnetFiles = [
     ...(await listFiles(path.join(ROOT, 'src', 'testnet'))),
     path.join(ROOT, 'src', 'adapters', 'pharosTestnet.ts'),
+    path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts'),
   ].filter((file) => file.endsWith('.ts'));
   assert.ok(testnetFiles.length >= 5);
   for (const file of testnetFiles) {
@@ -80,6 +89,37 @@ test('testnet adapter is isolated from mainnet and never targets rpc.pharos.xyz'
   const config = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'config.ts'), 'utf8');
   assert.match(config, /688689/);
   assert.match(config, /atlantic-testnet/);
+
+  const deployPlan = await fs.readFile(path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts'), 'utf8');
+  assert.doesNotMatch(deployPlan, /sendTransaction|writeContract|deployContract|sendRawTransaction/);
+  assert.doesNotMatch(deployPlan, /PRIVATE_KEY|privateKey|mnemonic/);
+});
+
+test('local anvil adapter is isolated to a disposable chain and never targets Atlantic or mainnet', async () => {
+  const localFiles = [
+    path.join(ROOT, 'src', 'adapters', 'localAnvil.ts'),
+    path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
+    path.join(ROOT, 'scripts', 'local-anvil.ts'),
+  ];
+  for (const file of localFiles) {
+    assert.equal(existsSync(file), true, `missing local-only file ${path.relative(ROOT, file)}`);
+    const source = await fs.readFile(file, 'utf8');
+    for (const forbidden of ['rpc.pharos.xyz', 'atlantic.pharosscan', '688689', 'mainnet.pharos']) {
+      assert.equal(
+        source.includes(forbidden),
+        false,
+        `${path.relative(ROOT, file)} must never target Atlantic or mainnet (${forbidden})`,
+      );
+    }
+  }
+  const saga = await fs.readFile(path.join(ROOT, 'src', 'domain', 'saga.ts'), 'utf8');
+  assert.match(saga, /'127\.0\.0\.1', 'localhost'/);
+  assert.match(saga, /31337/);
+  const foundry = await fs.readFile(path.join(ROOT, 'foundry.toml'), 'utf8');
+  assert.match(foundry, /http:\/\/127\.0\.0\.1:8545/);
+  assert.equal(foundry.includes('688689'), false, 'foundry.toml must not reference Atlantic chain id');
+  const demo = await fs.readFile(path.join(ROOT, 'scripts', 'local-anvil.ts'), 'utf8');
+  assert.match(demo, /NOT ATLANTIC TESTNET, NOT MAINNET/);
 });
 
 test('package manifest permits only viem for testnet and no other chain SDK', async () => {
@@ -96,14 +136,14 @@ test('package manifest permits only viem for testnet and no other chain SDK', as
   for (const banned of ['ethers', 'web3', 'wagmi', '@solana/web3.js', 'hardhat']) {
     assert.equal(all.includes(banned), false, `${banned} must not be installed`);
   }
-  for (const script of ['test', 'demo:success', 'demo:failure', 'verify']) {
+  for (const script of ['test', 'demo:success', 'demo:failure', 'demo:local', 'verify']) {
     assert.ok(manifest.scripts[script], `missing npm script ${script}`);
   }
 });
 
 test('repository ignore rules cover generated state, secrets and dependencies', async () => {
   const ignore = await fs.readFile(path.join(ROOT, '.gitignore'), 'utf8');
-  for (const pattern of ['node_modules/', 'state/', '.demo-state/', '.env', '.local/', 'dist/']) {
+  for (const pattern of ['node_modules/', 'state/', '.demo-state/', '.env', '.local/', 'dist/', 'out/', 'cache/']) {
     assert.ok(ignore.includes(pattern), `.gitignore must cover ${pattern}`);
   }
   assert.equal(existsSync(path.join(ROOT, '.env')), false, 'no .env file may exist');

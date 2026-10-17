@@ -23,12 +23,26 @@ as an installable agent skill for the Pharos Agent Arena task
 >
 > Simulated compensation is clearly labelled as a new simulated call, **not a
 > blockchain rollback**.
+>
+> **Local test-only validation (chainId 31337):** the saga executor has also
+> been run end-to-end against a disposable local Anvil chain with clearly
+> labelled `TestOnly*` mock contracts. All four scenarios pass with real local
+> transactions, bounded allowances and no blind resubmission. See
+> [`docs/local-anvil.md`](docs/local-anvil.md). This is **not** Atlantic or
+> mainnet evidence.
+>
+> **Atlantic deployment plan (prepared, not executed):** a read-only plan for
+> deploying the four `TestOnly*` contracts to Atlantic testnet is in
+> [`docs/testnet-deployment-plan.md`](docs/testnet-deployment-plan.md).
+> Nothing was signed or broadcast; deployment requires a separate explicit
+> approval of the plan hash.
 
 - Node.js 20+ (verified on Node 24.14.1)
 - Simulation path has no wallet, RPC or network calls; `viem` is used only by the
-  gated testnet adapter
+  gated testnet adapter and the local/testnet read-only tooling
 - State machine, retry policy, compensation, persistence, CLI and tests
-- **80 automated tests**, all offline
+- **87 offline automated tests**, plus **8 Foundry contract/gas tests** and a
+  **4-scenario local Anvil session** (`npm run demo:local`, test-only)
 
 ---
 
@@ -46,6 +60,8 @@ as an installable agent skill for the Pharos Agent Arena task
 - [CLI](#cli)
 - [Persistence](#persistence)
 - [Testnet readiness (read-only)](#testnet-readiness-read-only)
+- [Local Anvil validation (test-only)](#local-anvil-validation-test-only)
+- [Atlantic deployment plan (prepared, not executed)](#atlantic-deployment-plan-prepared-not-executed)
 - [Skill packaging and environment](#skill-packaging-and-environment)
 - [Tests and verification](#tests-and-verification)
 - [Safety](#safety)
@@ -67,9 +83,24 @@ npm run demo:manual
 npm run demo:unknown
 ```
 
-Expected: **80 tests pass**, then four simulation demos ending in `COMPLETED`,
+Expected: **87 tests pass**, then four simulation demos ending in `COMPLETED`,
 `FAILED` (compensation success), `MANUAL_RECOVERY_REQUIRED` (compensation
 failure), and `MANUAL_RECOVERY_REQUIRED` (unknown outcome).
+
+Optional local-only extra (requires Foundry in WSL, see
+[`docs/local-anvil.md`](docs/local-anvil.md)); it never touches Atlantic:
+
+```powershell
+wsl.exe -d Ubuntu -- /bin/bash --noprofile --norc -c 'cd /mnt/c/pharos-saga-executor && /home/wyka/.foundry/bin/forge test -vv'
+npm run demo:local
+```
+
+Optional read-only Atlantic deployment plan (requires the local env file and
+the public deployer address; nothing is signed):
+
+```powershell
+npm run testnet:deploy-plan -- --env-file C:\temp-secrets\.env --address 0xE2B8651178ade144003537eA509E37877dba40bb
+```
 
 The full reviewer checklist, expected states, audit markers, and submission
 blockers are in [`docs/reviewer-guide.md`](docs/reviewer-guide.md).
@@ -111,6 +142,8 @@ project therefore implements **honest compensation**, never a fake rollback:
 | Unknown submission outcome | `UnknownSubmissionOutcomeError` + reconcile-once | `test/failure.test.ts`, `test/persistence.test.ts`, `npm run demo:unknown` |
 | Never claim simulated = live | receipt verifier, CLI text, safety tests | `test/safety.test.ts`, `scripts/check-safety.mjs` |
 | Deterministic clock and jitter in tests | `VirtualClock`, injectable `JitterSource` | `test/helpers.ts` |
+| Real local chain execution, test-only | `LocalAnvilAdapter`, `TestOnly*` contracts, state guard 31337 | `npm run demo:local`, `contracts/test/*.t.sol` |
+| Atlantic deployment prepared without sending | read-only plan script, stable plan hash, bytecode hashes | `docs/testnet-deployment-plan.md`, `npm run testnet:deploy-plan` |
 
 ## Quick start
 
@@ -453,6 +486,49 @@ and the plan hash before the adapter can sign. It has not been run.
 Full findings: [`docs/testnet-readiness.md`](docs/testnet-readiness.md).
 Execution/approval status: [`docs/testnet-results.md`](docs/testnet-results.md).
 
+## Local Anvil validation (test-only)
+
+Because Atlantic currently has no official swap/router or vault, the real
+transaction path was exercised on a disposable local chain instead:
+
+```powershell
+npm run demo:local   # starts Anvil in WSL, deploys TestOnly* contracts, runs 4 scenarios
+```
+
+- chainId **31337** only; the adapter refuses any other chain and any RPC host
+  other than `127.0.0.1`/`localhost`;
+- real local transactions (no simulation flags), Anvil's unlocked account signs
+  them, so **no private key is needed, read or printed**;
+- scenarios: success (APPROVE -> SWAP -> DEPOSIT), forced SWAP revert with
+  `REVOKE_APPROVAL`, forced DEPOSIT revert with `SIMULATED_UNWIND_SWAP`, and an
+  injected unknown SWAP outcome that is reconciled **without a second send**;
+- allowances are exact and bounded; no unlimited approvals.
+
+Details, exact commands and observed output:
+[`docs/local-anvil.md`](docs/local-anvil.md).
+
+## Atlantic deployment plan (prepared, not executed)
+
+A read-only plan for deploying the four clearly labelled `TestOnly*` contracts
+to Atlantic testnet was prepared for review:
+
+```powershell
+npm run testnet:deploy-plan -- --env-file <local-env> --address 0xE2B8651178ade144003537eA509E37877dba40bb
+```
+
+It reads memoized chain state (block, balances, pending nonce, gas price) and
+compiled artifact hashes, then prints per-contract gas estimates, gas caps,
+predicted CREATE addresses and a stable plan hash. The script has no send or
+sign path (enforced by the safety gate), never reads the private key, and
+nothing was broadcast.
+
+- Plan hash: `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691`
+- Maximum planned spend at 10 gwei: **0.028 PHRS**, operator ceiling **0.05 PHRS**
+- Full plan: [`docs/testnet-deployment-plan.md`](docs/testnet-deployment-plan.md)
+
+Execution is a separate, explicitly approved future task; the predicted
+addresses are not valid until deployment receipts exist.
+
 ## Skill packaging and environment
 
 The Pharos environment exposes four hosted agent types and a Skill Engine page
@@ -503,12 +579,20 @@ npm run verify
 - testnet adapter readiness, plan gating, on-chain receipt verification, journal
   outcomes, reverted/timeout/ambiguous sends, postcondition failure, read retries,
   mainnet rejection, and partial-stop behaviour;
-- static safety checks.
+- local-anvil configuration gating, local receipt verification (no explorer
+  links, chainId 31337 only), bounded vault allowance rules, and the durable
+  local journal (INTENT before send);
+- static safety checks, including isolation of the local-anvil files from
+  Atlantic/mainnet targets and a read-only assertion on the deployment plan script.
 
 The suite uses `VirtualClock`, fixed jitter, a fake testnet client and temporary
 state directories, so it needs no wallet, live network, real funds or real-time
 retry waits. Exact test counts and command output are recorded in
 [`docs/verified-output.md`](docs/verified-output.md).
+
+The separate Foundry suite (`contracts/test/*.t.sol`, 8 tests) and the four-scenario
+local Anvil session (`npm run demo:local`) are documented in
+[`docs/local-anvil.md`](docs/local-anvil.md).
 
 ## Safety
 
@@ -532,6 +616,12 @@ retry waits. Exact test counts and command output are recorded in
 
 - Live testnet execution is currently **blocked**: no verified Atlantic
   swap/router or vault exists, so the plan contains zero transactions.
+- The real transaction path is validated only on a disposable local Anvil chain
+  with `TestOnly*` mocks (chainId 31337, `npm run demo:local`). It is not
+  Atlantic testnet evidence.
+- The Atlantic deployment plan is prepared but **not executed**: no `TestOnly*`
+  contract has been deployed to Atlantic, and predicted CREATE addresses are not
+  valid until real deployment receipts exist.
 - No mainnet adapter exists. Mainnet is explicitly rejected.
 - The simulated ledger is serialised within one process; the testnet journal is
   also single-process.

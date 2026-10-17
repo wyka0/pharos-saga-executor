@@ -190,7 +190,8 @@ export class SagaExecutor {
   }
 
   private mode(record: SagaRecord): string {
-    return this.isSimulated(record) ? 'simulated' : 'on-chain testnet';
+    if (this.isSimulated(record)) return 'simulated';
+    return record.config.adapterId === 'local-anvil' ? 'local Anvil test-chain' : 'on-chain testnet';
   }
 
   private receiptRef(receipt: ProofReceipt): string {
@@ -334,7 +335,9 @@ export class SagaExecutor {
         `Starting ${this.mode(record)} ${step} attempt ${attempt}/${record.config.retry.maxAttempts}. ` +
         (this.isSimulated(record)
           ? 'No on-chain transaction is possible with this adapter.'
-          : 'This will sign and broadcast on Pharos Atlantic testnet only if the plan hash is approved.'),
+          : record.config.adapterId === 'local-anvil'
+            ? 'This signs and broadcasts only on the disposable local Anvil chain.'
+            : 'This will sign and broadcast on Pharos Atlantic testnet only if the plan hash is approved.'),
       stepId: stepRecord.id,
       data: {
         step,
@@ -873,7 +876,9 @@ export class SagaExecutor {
         `Starting ${this.mode(record)} compensation ${action} for the original ${originalStep} failure. ` +
         (this.isSimulated(record)
           ? 'This is a new simulated call, not a blockchain rollback.'
-          : 'This is a new on-chain testnet transaction, not a blockchain rollback.'),
+          : record.config.adapterId === 'local-anvil'
+            ? 'This is a new local transaction on a disposable chain, not a blockchain rollback.'
+            : 'This is a new on-chain testnet transaction, not a blockchain rollback.'),
       stepId: `${record.id}:COMPENSATION:${action}`,
       data: { action, originalStep, simulated: this.isSimulated(record) },
     });

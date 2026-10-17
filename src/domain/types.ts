@@ -155,12 +155,27 @@ export interface TestnetConfig {
   approvedPlan: PlanApproval | null;
 }
 
+/**
+ * Local Anvil deployment addresses. This is test-only configuration for a
+ * disposable chain; it is never used for Atlantic or mainnet.
+ */
+export interface LocalAnvilConfig {
+  chainId: 31337;
+  rpcUrl: string;
+  owner: string;
+  usdc: string;
+  receiptToken: string;
+  swap: string;
+  vault: string;
+}
+
 export interface SagaConfig {
-  adapterId: 'simulated' | 'pharos-testnet';
+  adapterId: 'simulated' | 'pharos-testnet' | 'local-anvil';
   retry: RetryConfig;
   compensationPolicy: CompensationPolicy;
   scenario: AdapterScenario | null;
   testnet: TestnetConfig | null;
+  localAnvil: LocalAnvilConfig | null;
 }
 
 export interface ErrorRecord {
@@ -253,7 +268,35 @@ export interface OnChainReceipt {
   compensatesStep?: StepName;
 }
 
-export type ProofReceipt = SimulatedReceipt | OnChainReceipt;
+export type ProofReceipt = SimulatedReceipt | OnChainReceipt | LocalReceipt;
+
+/** A real transaction on a disposable local Anvil chain. Never Atlantic/mainnet. */
+export interface LocalReceipt {
+  receiptVersion: 1;
+  receiptKind: 'STEP' | 'COMPENSATION';
+  simulated: false;
+  network: 'local-anvil';
+  chainId: 31337;
+  disclaimer: string;
+  txHash: string;
+  blockNumber: string;
+  blockHash: string;
+  status: 'SUCCESS';
+  confirmations: number;
+  from: string;
+  to: string;
+  explorerUrl: null;
+  sagaId: string;
+  stepId: string;
+  idempotencyKey: string;
+  operation: ReceiptOperation;
+  issuedAt: string;
+  result: ReceiptResult;
+  gasUsed: string;
+  effectiveGasPrice: string;
+  postconditions: OnChainPostcondition[];
+  compensatesStep?: StepName;
+}
 
 export interface StepRecord {
   /** Stable identifier: `<sagaId>:<STEP>`. */
@@ -356,11 +399,12 @@ export interface StartSagaInput {
   sagaId?: string;
   clientRequestId?: string;
   request: SagaRequest;
-  adapterId?: 'simulated' | 'pharos-testnet';
+  adapterId?: 'simulated' | 'pharos-testnet' | 'local-anvil';
   retry?: Partial<RetryConfig>;
   compensationPolicy?: Partial<CompensationPolicy>;
   scenario?: AdapterScenario;
   testnet?: TestnetConfig;
+  localAnvil?: LocalAnvilConfig;
   /** Defaults to true. Set false to persist CREATED and inspect before running. */
   autoRun?: boolean;
 }

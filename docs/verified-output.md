@@ -725,3 +725,109 @@ proposed or executed transaction and Permit2 is not used as a protocol spender.
 | Project-originated transaction hash | **none** |
 
 No mocked or simulated result is presented as live testnet evidence.
+
+## 10. Iteration 3 (Task 5 continuation): local test-only validation and deployment plan
+
+Iteration 3 adds a real execution path on a **disposable local chain** and
+prepares (does not execute) an Atlantic deployment plan. No Atlantic or mainnet
+transaction was sent by this iteration either.
+
+### 10.1 Foundry environment
+
+Foundry already existed inside WSL Ubuntu; it was not on the Windows side.
+
+```text
+/home/wyka/.foundry/bin/forge --version -> forge 1.2.3-stable (a813a2cee7dd4926e7c56fd8a785b54f32e0d10f 2025-06-08)
+/home/wyka/.foundry/bin/anvil --version -> anvil 1.2.3-stable (same commit)
+```
+
+No PATH or shell startup file was modified. Commands were invoked with absolute
+paths through `wsl.exe -d Ubuntu -- ...`.
+
+### 10.2 Foundry tests
+
+```powershell
+wsl.exe -d Ubuntu -- /bin/bash --noprofile --norc -c 'cd /mnt/c/pharos-saga-executor && /home/wyka/.foundry/bin/forge test -vv'
+```
+
+Result: **8 tests passed, 0 failed** across 2 suites
+(`TestOnlySagaTest` = 7, `DeploymentGasTest` = 1).
+
+Measured deployment gas (also written to `snapshots/DeploymentGasTest.json`):
+
+| Contract | Deploy gas (local EVM) |
+| --- | ---: |
+| `TestOnlyUSDC` | 497,738 |
+| `TestOnlyReceiptToken` | 568,661 |
+| `TestOnlySwap` | 484,536 |
+| `TestOnlyVault` | 421,507 |
+| **Total** | **1,972,442** |
+
+### 10.3 Local Anvil end-to-end session
+
+```powershell
+npm run demo:local
+```
+
+The script starts Anvil in WSL on chainId **31337**, deploys the four
+`TestOnly*` contracts from `out/`, and drives the real `SagaExecutor` through
+four scenarios using the `local-anvil` adapter:
+
+| Scenario | Result | Key assertions |
+| --- | --- | --- |
+| APPROVE -> SWAP -> DEPOSIT success | PASS | 3 real local txs; exact 1 tUSDC spent; receipt tokens 0; vault shares 0.99; swap allowance consumed |
+| forced SWAP revert | PASS | permanent failure, `attempts = 1`, `REVOKE_APPROVAL` compensation succeeded, allowance 0 |
+| forced DEPOSIT revert | PASS | `SIMULATED_UNWIND_SWAP` compensation succeeded, receipt tokens burned, net cost 19,900 raw |
+| unknown SWAP outcome | PASS | reconciled by idempotency key, `sendCount = 3` (no resubmission), journal `CONFIRMED` |
+
+Local transactions are real (receipts have `simulated: false`,
+`network: "local-anvil"`, real tx hashes, `explorerUrl: null`) but exist only on
+the throwaway chain and are reset on every run. Full details:
+[`local-anvil.md`](local-anvil.md).
+
+### 10.4 Atlantic deployment plan (READ-ONLY, nothing sent)
+
+```powershell
+npm run testnet:deploy-plan -- --env-file C:\temp-secrets\.env --address 0xE2B8651178ade144003537eA509E37877dba40bb
+```
+
+Observed at plan time: chainId 688689, block 31544865, pending nonce 13,
+gas price 10 gwei, PHRS balance 0.542613955838483504, USDC 20.0.
+
+- Total gas cap: **2,800,000** across 4 deployments
+- Maximum planned spend at 10 gwei: **0.028 PHRS** (operator ceiling 0.05 PHRS)
+- Stable plan hash: `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691`
+- Predicted CREATE addresses are explicitly marked as predictions; no address is
+  claimed as deployed.
+
+The plan script has no send/sign/broadcast path and never references the signing
+key; `npm run verify` fails if that changes. Full plan:
+[`testnet-deployment-plan.md`](testnet-deployment-plan.md).
+
+### 10.5 Final verification (iteration 3)
+
+```text
+> npm run verify
+build: tsc -p tsconfig.json (exit 0)
+tests: 87 tests, 87 pass, 0 fail, 0 skipped (~33.9 s)
+safety gate: SAFETY GATE PASSED - simulation stays offline; testnet path is gated and mainnet-free.
+exit code 0
+```
+
+The original 61 simulation tests remain green; 19 testnet tests, 6 local-anvil
+offline tests and 1 additional isolation test bring the total to 87.
+`scripts/check-safety.mjs` additionally enforces local-anvil isolation from
+Atlantic/mainnet and the read-only property of the deployment plan script.
+
+### 10.6 Classification (iteration 3)
+
+| Artifact | Classification |
+| --- | --- |
+| `npm run demo:local` transactions | **REAL transactions on a disposable local chain (chainId 31337)**; not testnet evidence |
+| Foundry tests + gas snapshot | **LOCAL EVM**, offline |
+| `npm run testnet:deploy-plan` output | **LIVE READ-ONLY** Atlantic chain data; no transaction |
+| `TestOnly*` on Atlantic | **not deployed** (nonexistent until an approved separate task) |
+| Atlantic/mainnet transactions by this project | **still 0** |
+
+Local success is never presented as Atlantic evidence, and predicted addresses
+are never presented as deployed addresses.

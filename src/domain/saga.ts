@@ -20,6 +20,7 @@ import {
   type StepRecord,
   type TestnetConfig,
   type TestnetToken,
+  type LocalAnvilConfig,
 } from './types.js';
 
 const SAGA_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
@@ -170,16 +171,36 @@ export function buildConfig(input: StartSagaInput): SagaConfig {
     if (!input.testnet) {
       throw new ConfigurationError('adapterId pharos-testnet requires a testnet configuration');
     }
+    if (input.localAnvil) {
+      throw new ConfigurationError('localAnvil configuration requires adapterId local-anvil');
+    }
     return {
       adapterId,
       retry: assertRetryConfig(input.retry ?? DEFAULT_RETRY),
       compensationPolicy: normalizeCompensationPolicy(input.compensationPolicy),
       scenario: null,
       testnet: validateTestnetConfig(input.testnet),
+      localAnvil: null,
     };
   }
-  if (input.testnet) {
-    throw new ConfigurationError('testnet configuration requires adapterId pharos-testnet');
+  if (adapterId === 'local-anvil') {
+    if (!input.localAnvil) {
+      throw new ConfigurationError('adapterId local-anvil requires a localAnvil configuration');
+    }
+    if (input.testnet) {
+      throw new ConfigurationError('testnet configuration cannot be used with adapterId local-anvil');
+    }
+    return {
+      adapterId,
+      retry: assertRetryConfig(input.retry ?? DEFAULT_RETRY),
+      compensationPolicy: normalizeCompensationPolicy(input.compensationPolicy),
+      scenario: null,
+      testnet: null,
+      localAnvil: validateLocalAnvilConfig(input.localAnvil),
+    };
+  }
+  if (input.testnet || input.localAnvil) {
+    throw new ConfigurationError('testnet/localAnvil configuration requires the matching adapterId');
   }
   return {
     adapterId: 'simulated',
@@ -187,7 +208,38 @@ export function buildConfig(input: StartSagaInput): SagaConfig {
     compensationPolicy: normalizeCompensationPolicy(input.compensationPolicy),
     scenario: normalizeScenario(input.scenario),
     testnet: null,
+    localAnvil: null,
   };
+}
+
+export function validateLocalAnvilConfig(input: LocalAnvilConfig): LocalAnvilConfig {
+  if (input.chainId !== 31337) {
+    throw new ConfigurationError('Local Anvil adapter requires chainId 31337');
+  }
+  let url: URL;
+  try {
+    url = new URL(input.rpcUrl);
+  } catch {
+    throw new ConfigurationError('localAnvil.rpcUrl must be a valid URL');
+  }
+  if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(url.hostname)) {
+    throw new ConfigurationError(
+      'localAnvil.rpcUrl must be a localhost HTTP endpoint (127.0.0.1 or localhost)',
+    );
+  }
+  const addressPattern = /^0x[0-9a-fA-F]{40}$/;
+  for (const [label, value] of Object.entries({
+    owner: input.owner,
+    usdc: input.usdc,
+    receiptToken: input.receiptToken,
+    swap: input.swap,
+    vault: input.vault,
+  })) {
+    if (!addressPattern.test(value)) {
+      throw new ConfigurationError(`localAnvil.${label} must be a valid address`);
+    }
+  }
+  return structuredClone(input);
 }
 
 export function createSagaRecord(input: StartSagaInput, clock: Clock): SagaRecord {
@@ -231,7 +283,9 @@ export function createSagaRecord(input: StartSagaInput, clock: Clock): SagaRecor
       disclaimer:
         config.adapterId === 'simulated'
           ? SIMULATED_DISCLAIMER
-          : 'ON-CHAIN TESTNET - Pharos Atlantic testnet (chainId 688689). Testnet funds only.',
+          : config.adapterId === 'local-anvil'
+            ? 'LOCAL ANVIL TEST-ONLY CHAIN (chainId 31337). No Atlantic or mainnet transaction.'
+            : 'ON-CHAIN TESTNET - Pharos Atlantic testnet (chainId 688689). Testnet funds only.',
       scenario: config.scenario?.name ?? null,
       testnet: config.testnet
         ? {
@@ -240,6 +294,15 @@ export function createSagaRecord(input: StartSagaInput, clock: Clock): SagaRecor
             swapConfigured: config.testnet.swap !== null,
             depositConfigured: config.testnet.deposit !== null,
             approvedPlan: config.testnet.approvedPlan?.planHash ?? null,
+          }
+        : null,
+      localAnvil: config.localAnvil
+        ? {
+            chainId: config.localAnvil.chainId,
+            rpcUrl: config.localAnvil.rpcUrl,
+            usdc: config.localAnvil.usdc,
+            swap: config.localAnvil.swap,
+            vault: config.localAnvil.vault,
           }
         : null,
       retry: config.retry,

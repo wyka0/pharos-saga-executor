@@ -234,7 +234,7 @@ approval-gate, on-chain receipt, journal and safety-isolation tests.
 npm run verify
 ```
 
-Result: **PASS** — TypeScript build, 80/80 tests, and the static safety gate
+Result: **PASS** — TypeScript build, 87/87 tests, and the static safety gate
 (see [verified-output.md](verified-output.md) for the full recorded run).
 
 ## 10. What is required next
@@ -252,64 +252,51 @@ reviewed (network, addresses, token amount, allowance, calldata, gas, maximum
 cost, postconditions) and its exact hash approved before `testnet:run` may sign
 or broadcast. No such approval exists yet.
 
-## 11. Proposed test-only deployment plan (NOT EXECUTED)
+## 11. Test-only deployment plan (PREPARED, NOT EXECUTED)
 
-This is a proposal for a **separate, explicitly approved** task. Nothing in this
-section has been written, compiled, deployed or signed.
+The plan originally proposed here has been **prepared in full, compiled and
+locally validated**, but still **not executed**. The current state:
 
-### Why
+- Foundry was found and used in **WSL Ubuntu** (`/home/wyka/.foundry/bin`,
+  version 1.2.3-stable); it was not installed on the Windows side.
+- Four clearly labelled test-only contracts exist under `contracts/test-only/`:
+  `TestOnlyUSDC`, `TestOnlyReceiptToken`, `TestOnlySwap` (1% test fee,
+  `unwind()` reverse path) and `TestOnlyVault` (1:1 shares). Fault hooks make
+  failures deterministic.
+- Eight Foundry tests pass locally, including deployment-gas measurement.
+- A **four-scenario local Anvil session** (`npm run demo:local`) runs the real
+  executor with real local transactions: success, forced SWAP revert with
+  `REVOKE_APPROVAL`, forced DEPOSIT revert with `SIMULATED_UNWIND_SWAP`, and an
+  unknown SWAP outcome reconciled without resubmission. See
+  [local-anvil.md](local-anvil.md).
+- A **read-only Atlantic deployment plan** was produced from live chain state:
+  [testnet-deployment-plan.md](testnet-deployment-plan.md).
+  - Plan hash: `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691`
+  - 4 deployments (USDC mock, receipt token, swap, vault), measured deploy gas
+    **1,972,442**, total gas cap **2,800,000**
+  - Maximum planned spend at the observed 10 gwei: **0.028 PHRS** (operator
+    ceiling 0.05 PHRS; wallet holds 0.5426 PHRS)
+  - Predicted CREATE addresses are explicitly marked as predictions, valid only
+    if the pending nonce (13) does not move first.
 
-There is no verified Atlantic swap/router or vault. The only safe way to
-demonstrate a live three-step saga is to deploy clearly labelled test-only
-contracts and verify their addresses and behavior before use. The governor
-address and arbitrary contracts are **not** substitutes.
+### Status of the original constraints
 
-### Proposed contracts
+| Original requirement | Current state |
+| --- | --- |
+| Test-only contracts, clearly named | Done (`contracts/test-only/`, labelled in code and docs) |
+| No mainnet / no real funds | Enforced (chain guards; safety gate) |
+| No unlimited approvals | Exact, bounded allowances only |
+| Exact plan hash approval before signing | Plan hash produced; **no approval requested yet; nothing signed** |
+| No blind resend after unknown | Proven on local Anvil (`sendCount` unchanged after reconcile) |
 
-| Contract | Purpose | Trust boundary |
-| --- | --- | --- |
-| `TestOnlyReceiptToken` | mintable ERC-20 representing swap output | test-only; no value; mint/burn restricted to the test swap |
-| `TestOnlySwap` | `swapExactUsdcForReceipt(amountIn, minOut)` pulls official USDC via `transferFrom`, mints receipt tokens at a fixed 1:1 rate minus a documented test fee; `unwind(receiptAmount)` burns receipt tokens and returns USDC | test-only; fixed rate; no oracle; no owner drain |
-| `TestOnlyVault` | `deposit(receiptAmount)` pulls receipt tokens and credits shares; `withdraw(shares)` returns receipt tokens | test-only; no yield; no strategy |
+### What is still required before Atlantic deployment
 
-Using the official test USDC avoids deploying a fake stablecoin and keeps the
-approval target meaningful.
+1. Explicit user approval of the exact plan hash above.
+2. Review of the plan document, including constructor arguments, gas caps,
+   predicted addresses and the 0.05 PHRS ceiling.
+3. A separate, reviewed execution task with a dedicated deployment script
+   (INTENT journal before each send, no retry on ambiguous outcomes, receipt
+   verification, actual-address recording). That script does not exist yet.
 
-### Proposed sequence (after separate approval)
-
-1. Deploy `TestOnlyReceiptToken`.
-2. Deploy `TestOnlySwap(USDC, receiptToken)`.
-3. Deploy `TestOnlyVault(receiptToken)`.
-4. Verify bytecode and constructor arguments on the explorer; record addresses.
-5. Fund the swap with a small USDC inventory if unwind liquidity is required.
-6. Run the saga with `amountIn = 1 USDC`:
-   - `APPROVE`: `approve(TestOnlySwap, 1 USDC)` — exact allowance, no unlimited
-     approval.
-   - `SWAP`: `swapExactUsdcForReceipt(1 USDC, minOut)`; verify receipt token
-     balance increase.
-   - `DEPOSIT`: `deposit(receiptAmount)`; verify vault shares increase.
-7. Use `testnet:plan` to produce the exact calldata, gas estimates and plan hash
-   for each step; approve the exact hash before `testnet:run`.
-
-### Rough cost expectation (not a quote)
-
-The wallet holds `0.542613955838483504 PHRS`. Three small contract deployments
-plus three saga transactions should cost far less than 0.1 PHRS at 10 gwei, but
-**exact gas is unknown until the contracts are compiled and estimated**. No gas
-number in this proposal is a commitment.
-
-### Tooling blocker
-
-Foundry (`forge`, `anvil`, `cast`) is **not installed** on this machine, and no
-Solidity compiler is available. The proposal cannot be executed until one of
-these is provided and approved. Installing Foundry was explicitly out of scope
-for the current task.
-
-### Safety rules for that separate task
-
-- Test-only contracts, clearly named and documented as non-official.
-- No mainnet, no real funds, no arbitrary protocol targets.
-- No unlimited approvals; exact allowance only.
-- Exact plan hash approval and `--confirm-atlantic-testnet` before any signature.
-- No blind resend after an unknown outcome.
-- If deployment or verification fails, stop and preserve evidence.
+No `TestOnly*` contract has been deployed to Atlantic. No transaction has been
+sent by this project.

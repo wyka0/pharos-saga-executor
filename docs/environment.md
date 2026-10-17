@@ -227,6 +227,28 @@ The guest bootstrap response contained a token; it was printed only in redacted
 form and was never written to disk. Anyone re-running the inspection should do
 the same and must not commit captured tokens.
 
-The project's own runtime makes **zero network calls**. This was checked by a
-static test (`test/safety.test.ts`) that rejects `http://`, `https://`, `fetch(`,
-wallet/signing APIs, and key material in `src/` and `scripts/`.
+The project's own **simulation runtime** makes zero network calls. This was
+checked by a static test (`test/safety.test.ts`) that rejects `http://`,
+`https://`, `fetch(`, wallet/signing APIs, and key material in the simulation
+surface. Files that are intentionally network-capable (the gated testnet
+adapter/client, the test-only local Anvil adapter and the read-only deployment
+plan script) are excluded from that specific scan and are instead covered by
+dedicated isolation checks: no mainnet targets, no key literals, no send/sign
+path in read-only tooling.
+
+## 9. Local tooling environment (Task 5 continuation)
+
+- OpenCode runs commands through **Windows PowerShell 5.1**.
+- **Foundry is installed inside WSL Ubuntu** at `/home/wyka/.foundry/bin`
+  (`forge`/`anvil`/`cast` **1.2.3-stable**, commit
+  `a813a2cee7dd4926e7c56fd8a785b54f32e0d10f`). It is not installed on the
+  Windows side, which is why Windows-direct invocations fail. All Solidity work
+  uses absolute WSL paths via `wsl.exe -d Ubuntu -- ...`.
+- **No PATH or shell startup files were modified.** One unrelated finding is
+  reported but untouched: `/home/wyka/.bash_profile` references a missing
+  `/home/wyka/.wasmedge/env`; this is not related to Foundry or this project.
+- WSL interop expands `$PATH` from Windows before Bash sees it, which breaks
+  one-liners on parentheses (e.g. `Program Files (x86)`). Use absolute paths
+  and avoid `$PATH` expansions in `wsl.exe ... bash -c` strings.
+
+Details and exact commands: [`local-anvil.md`](local-anvil.md).
