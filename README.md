@@ -16,8 +16,9 @@ as an installable agent skill for the Pharos Agent Arena task
 >
 > A separate, gated **Pharos Atlantic testnet adapter** has been added. It is
 > read-only until a user approves an exact plan hash. At this time it is
-> **blocked**: the wallet has zero test ERC-20s and there is no official
-> DEX/router or vault on Atlantic. **No live transaction has been sent.** See
+> **blocked**: the wallet now holds 20 test USDC, but there is no official
+> DEX/router or vault on Atlantic. **No live transaction has been sent** by this
+> project. The external 20 USDC funding transfer is verified in
 > [`docs/testnet-results.md`](docs/testnet-results.md).
 >
 > Simulated compensation is clearly labelled as a new simulated call, **not a
@@ -414,7 +415,7 @@ It is **not approved and has not sent any transaction**. The verified facts:
 | Explorer | `https://atlantic.pharosscan.xyz/` |
 | Wallet | `0xE2B8651178ade144003537eA509E37877dba40bb` |
 | Native balance | 0.542613955838483504 PHRS |
-| Test ERC-20 balances | **0** for all five documented tokens |
+| Test ERC-20 balances | **20 USDC**; other four tokens **0** |
 | Verified tokens | USDC, USDT, WBTC, WETH, WPHRS (code + symbol + decimals checked) |
 | Swap/router | **none documented/deployed on Atlantic** |
 | Deposit/vault | **none documented/deployed on Atlantic** |
@@ -423,7 +424,7 @@ It is **not approved and has not sent any transaction**. The verified facts:
 Capabilities reported by the adapter:
 
 ```text
-APPROVE available=false  (no verified spender; 0 USDC)
+APPROVE available=false  (no verified spender; wallet has 20 USDC)
 SWAP    available=false  (no verified router)
 DEPOSIT available=false  (no verified vault)
 ```
@@ -529,8 +530,8 @@ retry waits. Exact test counts and command output are recorded in
 
 ## Limitations
 
-- Live testnet execution is currently **blocked**: zero test ERC-20 balance and no
-  officially verified Atlantic swap/router or vault.
+- Live testnet execution is currently **blocked**: no verified Atlantic
+  swap/router or vault exists, so the plan contains zero transactions.
 - No mainnet adapter exists. Mainnet is explicitly rejected.
 - The simulated ledger is serialised within one process; the testnet journal is
   also single-process.

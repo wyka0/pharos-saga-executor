@@ -572,7 +572,7 @@ Recorded result:
 ℹ tests 80
 ℹ pass 80
 ℹ fail 0
-ℹ duration_ms 31579.9339
+ℹ duration_ms 72592.8604
 PASS  25 simulation files are free of wallet/RPC/network code
 PASS  10 testnet files are isolated from mainnet and contain no key literals
 PASS  only viem is declared as a runtime dependency
@@ -583,7 +583,10 @@ SAFETY GATE PASSED - simulation stays offline; testnet path is gated and mainnet
 Test distribution: 10 state machine + 4 success + 7 retry + 13 failure +
 9 persistence + 7 audit + 4 CLI + 9 safety + 17 testnet = **80**.
 
-## 9.3 Read-only readiness result
+## 9.3 Initial readiness result (pre-funding)
+
+This capture predates the external 20 USDC funding transfer, so its USDC balance
+is zero. The post-funding check is in section 9.3.1.
 
 Command (no signing key read; `--address` used):
 
@@ -629,6 +632,30 @@ Capabilities:
 No transaction was signed or broadcast.
 ```
 
+### 9.3.1 Post-funding verification (read-only)
+
+The wallet received 20 USDC from an external transfer. Verified independently by
+JSON-RPC and the explorer:
+
+| Check | Result |
+| --- | --- |
+| `eth_chainId` | **688689** |
+| Latest block | `31543563` |
+| Wallet | `0xE2B8651178ade144003537eA509E37877dba40bb` |
+| Native balance | `542613955838483504` wei = **0.542613955838483504 PHRS** |
+| USDC code / symbol / decimals | present (1,798 bytes) / `USDC` / `6` |
+| USDC total supply | `100108237887829` raw |
+| USDC wallet balance | `20000000` raw = **20 USDC** |
+| Funding transaction | `0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b` |
+| Funding block / time | `31543356` / `2026-10-17T17:01:25Z` |
+| Funding from / to | `0x4cf51364a6d88ba64bcdb93f444b05d1cf4f00e3` → USDC contract |
+| Funding receipt | **success**, one `Transfer` log of `20000000` raw to the wallet |
+| Explorer | <https://atlantic.pharosscan.xyz/tx/0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b> |
+| Explorer API | status `1`, method `Transfer`, block `31543356` |
+
+The funding transaction was sent externally; this project did not sign or
+broadcast it. All project-originated transaction counts below remain zero.
+
 ## 9.4 Transaction plan result
 
 Command (read-only):
@@ -666,15 +693,20 @@ Blocked reasons:
 Because the plan is not executable, there is no transaction to approve. The
 `testnet:run` command was **not** invoked. No key was read by readiness/planning.
 
+A post-funding re-check for **1 USDC** produced the same blocked plan hash
+(`6d2be1d...`), still with `Transactions (0)`. The balance is no longer a blocker;
+the missing verified spender/protocol is.
+
 ## 9.5 Gas and transaction evidence
 
 | Metric | Result |
 | --- | --- |
-| Transactions signed | **0** |
-| Transactions broadcast | **0** |
-| Transaction hashes | **none** |
-| Gas spent | **0** |
-| Explorer links | **none** |
+| Transactions signed by this project | **0** |
+| Transactions broadcast by this project | **0** |
+| Project transaction hashes | **none** |
+| Gas spent by this project | **0** |
+| Project explorer links | **none** |
+| External funding transaction | `0x9e4834...76370b`, success, fee `0.00018637775 PHRS` |
 
 A separate read-only `eth_estimateGas` for a hypothetical 0.01 USDC
 `approve(Permit2, amount)` returned 71,377 gas at 10 gwei (0.00071377 PHRS at
@@ -687,8 +719,9 @@ proposed or executed transaction and Permit2 is not used as a protocol spender.
 | --- | --- |
 | `testnet:readiness` output | **LIVE READ-ONLY** chain data; no transaction |
 | `testnet:plan` output | **LIVE READ-ONLY** plan; executable=false, zero transactions |
+| `0x9e4834...76370b` | **EXTERNAL LIVE TESTNET TRANSFER** (20 USDC funding); not sent by this project |
 | `test/testnet.test.ts` | **MOCKED** chain client, offline |
 | `npm run demo:*` | **SIMULATED** adapter, offline |
-| Any transaction hash | **none** |
+| Project-originated transaction hash | **none** |
 
 No mocked or simulated result is presented as live testnet evidence.

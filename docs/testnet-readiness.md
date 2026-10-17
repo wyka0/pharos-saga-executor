@@ -82,12 +82,36 @@ used):
 | --- | --- |
 | Address | `0xE2B8651178ade144003537eA509E37877dba40bb` |
 | Chain ID | **688689** — correct Atlantic testnet |
-| Native balance | **0.542613955838483504 PHRS** |
-| Nonce | **13** at inspection time |
-| Total test ERC-20 balances | **0** across all documented tokens |
+| Native balance | **0.542613955838483504 PHRS** (exact wei: `542613955838483504`) |
+| Nonce | **13** |
+| USDC balance | **20 USDC** (`20000000` base units, 6 decimals) |
+| Other test ERC-20 balances | **0** USDT / WBTC / WETH / WPHRS |
 
-The wallet is on the correct network and has enough native gas for a small
-approve transaction. It has **no test ERC-20 tokens**.
+The wallet is on the correct network and has both gas and test USDC. It still has
+**no verified protocol** to use as a swap or deposit target.
+
+### 4.1 Funding verification (2026-10-17)
+
+The wallet was funded externally with 20 USDC. The transaction was verified
+read-only via JSON-RPC and the explorer:
+
+| Field | Verified value |
+| --- | --- |
+| Transaction | `0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b` |
+| Explorer | <https://atlantic.pharosscan.xyz/tx/0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b> |
+| Block | `31543356` |
+| Block timestamp | `2026-10-17T17:01:25Z` |
+| From | `0x4cf51364a6d88ba64bcdb93f444b05d1cf4f00e3` |
+| To | USDC contract `0xcfC8330f4BCAB529c625D12781b1C19466A9Fc8B` |
+| Method | `transfer(address,uint256)` (`0xa9059cbb`) |
+| Receipt status | **success** |
+| USDC `Transfer` log | from funder to `0xE2B8651178ade144003537eA509E37877dba40bb`, `20000000` raw = **20 USDC** |
+| Gas used / price | 57,347 / 3.25 gwei |
+| Fee | `0.00018637775 PHRS` |
+
+A fresh `balanceOf(wallet)` call after the receipt returned exactly
+`20000000` base units. The funding transaction was sent externally; this project
+did not sign or broadcast it.
 
 ## 5. Verified token contracts
 
@@ -97,7 +121,7 @@ match the registry, and `totalSupply()` is non-zero.
 
 | Symbol | Address | Decimals | Code | On-chain metadata | Wallet balance |
 | --- | --- | ---: | --- | --- | ---: |
-| USDC | `0xcfC8330f4BCAB529c625D12781b1C19466A9Fc8B` | 6 | present | verified | **0** |
+| USDC | `0xcfC8330f4BCAB529c625D12781b1C19466A9Fc8B` | 6 | present | verified | **20** |
 | USDT | `0xE7E84B8B4f39C507499c40B4ac199B050e2882d5` | 6 | present | verified | **0** |
 | WBTC | `0x0c64F03EEa5c30946D5c55B4b532D08ad74638a4` | 18 | present | verified | **0** |
 | WETH | `0x7d211F77525ea39A0592794f793cC1036eEaccD5` | 18 | present | verified | **0** |
@@ -107,15 +131,21 @@ The official registry lists `initsupply = 0` for these entries even though the
 deployed contracts currently report a non-zero total supply. That is a registry
 presentation detail; on-chain metadata was used for the readiness decision.
 
+USDC on-chain state at the post-funding check: **1,798 bytes of code**, symbol
+`USDC`, decimals `6`, total supply `100108237887829` raw
+(100,108,237.887829 USDC), wallet balance `20000000` raw (20 USDC).
+
 ## 6. Faucet availability
 
 - **Native PHRS:** the docs mention a Pharos faucet/team but publish **no public
   faucet URL**. The wallet already holds 0.5426 PHRS, so no funding request is
   needed for gas.
 - **Test ERC-20s (USDC/USDT/WBTC/WETH/WPHRS):** no public faucet or distribution
-  URL is documented. The wallet holds zero of every token.
+  URL is documented. The wallet was separately funded with **20 USDC**; the
+  other tokens remain zero.
 
-No funds were requested, and no automatic network switch or transfer was made.
+No funds were requested by this project, and no automatic network switch or
+transfer was made. The funding transaction came from an external address.
 
 ## 7. Deployed swap/deposit protocols
 
@@ -146,15 +176,19 @@ authorized, so it was not done.
 
 | Step | Capability | Reason |
 | --- | --- | --- |
-| `APPROVE` | **UNAVAILABLE** | No verified protocol spender exists, and the wallet has 0 of every documented token. |
+| `APPROVE` | **UNAVAILABLE** | No verified protocol spender exists. The wallet now holds 20 USDC, so balance is no longer the blocker. |
 | `SWAP` | **UNAVAILABLE** | No verified swap/router or calldata/ABI exists on Atlantic. |
 | `DEPOSIT` | **UNAVAILABLE** | No verified vault/lending/deposit protocol exists on Atlantic. |
-| Full APPROVE→SWAP→DEPOSIT | **BLOCKED** | All three prerequisites above are missing. |
+| Full APPROVE→SWAP→DEPOSIT | **BLOCKED** | The protocol prerequisites remain missing. |
 
 The adapter refuses to approve an arbitrary address, to target a random contract,
 or to invent calldata. Those refusals are tested offline.
 
-## 9. Actual readiness output
+## 9. Initial readiness output (pre-funding)
+
+The capture below is retained as the original readiness snapshot. It shows a
+zero USDC balance because it was taken before the externally funded transfer.
+The current balance and funding transaction are in section 4.1.
 
 Command (read-only; `--address` means no signing key was read):
 
@@ -201,17 +235,34 @@ Capabilities:
 No transaction was signed or broadcast.
 ```
 
+### 9.1 Post-funding verification (read-only)
+
+A second read-only pass after the funding transfer confirmed:
+
+| Check | Result |
+| --- | --- |
+| `eth_chainId` | **688689** |
+| Latest block observed | `31543563` |
+| Wallet | `0xE2B8651178ade144003537eA509E37877dba40bb` |
+| Native balance | `542613955838483504` wei = **0.542613955838483504 PHRS** |
+| USDC code | present, 1,798 bytes |
+| USDC `symbol()` / `decimals()` | `USDC` / `6` |
+| USDC total supply | `100108237887829` raw |
+| USDC wallet balance | `20000000` raw = **20 USDC** |
+| Funding receipt | **success**, block `31543356` |
+| Transactions signed/broadcast by this project | **0** |
+
 ## 10. What must be true before a live test
 
-1. **Fund the wallet with the input token.** The documented token registry is
-   verified, but there is no documented faucet. A documented faucet/team
-   distribution or an explicit transfer from a controlled source is required.
+1. **Fund the wallet with the input token — DONE.** The wallet holds 20 USDC
+   from the verified funding transaction in section 4.1.
 2. **Provide a verified spender/protocol.** A contract address alone is not
    enough: it must be documented as a swap/router or deposit/vault for Atlantic,
    with a published ABI/calldata contract and a known postcondition. None exists
    in the official docs today.
-3. Alternatively, **explicitly authorize deploying test contracts** (token +
-   DEX/vault) in a separate, separately approved task. No deployment was done.
+3. Alternatively, **explicitly authorize deploying test-only contracts** (a
+   mock swap and mock vault, or a token + DEX + vault set) in a separate,
+   separately approved task. No deployment was done.
 4. Re-run `testnet:plan`, review the exact calldata, gas and maximum cost, and
    approve the resulting plan hash explicitly.
 

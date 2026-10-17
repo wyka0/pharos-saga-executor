@@ -32,7 +32,7 @@ APPROVE -> verify receipt -> SWAP -> verify receipt -> DEPOSIT -> verify receipt
 ```
 
 The default adapter is simulated. A gated Atlantic testnet adapter is available
-but currently **blocked** by missing verified token/protocol prerequisites.
+but currently **blocked** by the missing verified protocol prerequisite.
 
 ## Status and safety boundary (read this first)
 
@@ -43,8 +43,9 @@ but currently **blocked** by missing verified token/protocol prerequisites.
 >
 > **Testnet path: Atlantic only (chainId 688689).** It requires an explicit plan
 > hash approval plus a CLI confirmation gate. It rejects any other chain,
-> including mainnet 1672. **No live transaction has been sent.** The wallet has
-> zero test ERC-20s and no official Atlantic DEX/router or vault exists.
+> including mainnet 1672. **No live transaction has been sent.** The wallet holds
+> 20 test USDC, but no official Atlantic DEX/router or vault exists, so the live
+> plan remains blocked.
 
 The skill must **never**:
 
@@ -181,7 +182,8 @@ documented (`RPC_URL`, `PRIVATE_KEY`); values are never printed or committed.
 hash and `--confirm-atlantic-testnet`.
 
 At present the plan is **not executable** (zero transactions) because there is no
-verified Atlantic router/vault and the wallet holds zero test ERC-20s. Do not
+verified Atlantic router/vault. The wallet now holds 20 test USDC, but there is
+still no verified spender, so the plan contains zero transactions. Do not
 fabricate a live run.
 
 Use `--state-dir <path>` to choose the persisted state directory (default

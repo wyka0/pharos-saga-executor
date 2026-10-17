@@ -7,11 +7,15 @@ Project: `C:\pharos-saga-executor`
 
 > ## Status: NOT APPROVED / NOT EXECUTED
 >
-> No transaction was signed, broadcast or confirmed.
-> There are **no transaction hashes** to report.
-> The live APPROVE, SWAP and DEPOSIT steps are all **blocked** by missing
-> prerequisites documented in [testnet-readiness.md](testnet-readiness.md).
-> Everything below is either a real read-only network check or an offline test.
+> This project has not signed, broadcast or confirmed any transaction.
+> The wallet was separately funded with **20 USDC** by an external testnet
+> transfer whose receipt is verified below. That funding transaction was not sent
+> by this project.
+> The live APPROVE, SWAP and DEPOSIT steps are all **blocked** by the missing
+> verified protocol prerequisite documented in
+> [testnet-readiness.md](testnet-readiness.md).
+> Everything below is either a real read-only network check, an external funding
+> transaction, or an offline/mocked test.
 
 ## 1. Implementation summary
 
@@ -81,19 +85,40 @@ No transaction is sent by this planning command.
 so there is nothing to approve or sign. The hash is recorded for audit only.
 The `testnet:run` command was never invoked.
 
+### 2.1 Post-funding plan re-check (1 USDC)
+
+After the wallet received 20 USDC, the plan was re-generated read-only for
+**1 USDC** with the same default testnet config (no verified protocol):
+
+```text
+Plan hash:   6d2be1d2f0146b6fd6f29f593976fb24037548bc55eec6743691893927dd7507
+Step:        APPROVE
+Executable:  false
+Transactions (0):
+Blocked reasons:
+  - No verified swap or deposit contract is configured, so there is no justified
+    approval spender. Refusing to approve an arbitrary address.
+```
+
+The balance is no longer a blocker. The sole remaining blocker is the absence of
+a verified spender/protocol. No transaction was signed or broadcast.
+
 ## 3. Live operations tested
 
 | Operation | Live result |
 | --- | --- |
 | `eth_chainId` | **688689** (correct Atlantic testnet) |
-| `eth_blockNumber` | 31,540,254 at readiness time |
-| Native balance | 0.542613955838483504 PHRS |
-| Token code + metadata | 5/5 documented tokens verified (USDC, USDT, WBTC, WETH, WPHRS) |
-| Token balances | 0 for every token |
-| Gas estimate | Not produced for a live plan because the plan is blocked |
-| Transaction sent | **None** |
-| Transaction hash | **None** |
-| Gas spent | **0** |
+| `eth_blockNumber` | 31,543,563 at post-funding check |
+| Native balance | `542613955838483504` wei = 0.542613955838483504 PHRS |
+| USDC contract | code present (1,798 bytes), `symbol()` = USDC, `decimals()` = 6 |
+| USDC total supply | `100108237887829` raw |
+| Token balances | **20 USDC**; USDT/WBTC/WETH/WPHRS 0 |
+| Funding transaction | `0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b`, block 31543356, success, one `Transfer` log of 20 USDC to the wallet |
+| Transactions sent by this project | **None** |
+| Gas spent by this project | **0** |
+
+Funding explorer link:
+<https://atlantic.pharosscan.xyz/tx/0x9e4834a1cf39b353c134ba4cc002c46357b54acd0e6d7d0c12bab759cc76370b>
 
 ### Hypothetical gas (not executed)
 
@@ -109,8 +134,8 @@ cost at gas price:    0.00071377 PHRS
 ```
 
 This is **not** a proposed transaction. The live plan above contains zero
-transactions because no verified protocol spender exists and the wallet has zero
-USDC.
+transactions because no verified protocol spender exists, even though the wallet
+now holds 20 USDC.
 
 ## 4. Mocked and simulated failure testing
 
@@ -131,7 +156,7 @@ The original simulated-adapter demos remain unchanged and passing.
 ## 5. Test results
 
 ```text
-npm test       -> 80 tests, 80 pass, 0 fail, 0 skipped (~31 s)
+npm test       -> 80 tests, 80 pass, 0 fail, 0 skipped (~73 s)
 npm run verify -> build + 80 tests + safety gate (see exact run below)
 ```
 
@@ -187,17 +212,21 @@ approval-gate, on-chain receipt, journal and safety-isolation tests.
 
 ## 8. Limitations / manual recovery
 
-1. **No live operation was possible.** The wallet has gas but no test tokens, and
-   no verified swap/deposit protocol exists.
+1. **No live saga operation was possible.** The wallet has gas and 20 test USDC,
+   but no verified swap/deposit protocol exists, so the plan remains
+   non-executable.
 2. **No transaction plan is executable.** The plan contains zero transactions and
    `executable=false`.
-3. **No deployment was performed.** Deploying a token/DEX/vault would require a
-   separate explicit approval and is outside this task.
+3. **No deployment was performed.** Deploying a test-only DEX/vault would require
+   a separate explicit approval and is outside this task.
 4. **Unknown outcomes require manual recovery.** The adapter never resubmits.
 5. **The testnet journal is single-process.** Cross-process concurrent writers are
    not supported.
 6. **The local RPC path may contain a provider key.** It is read from the local env
    and redacted; it is never persisted.
+7. **RPC rate limits.** The public endpoint returns `cu limit exceeded` under
+   bursts; read-only checks retry with backoff and may still report a token-read
+   warning.
 
 ## 9. Exact verification command and result
 
@@ -212,13 +241,75 @@ Result: **PASS** — TypeScript build, 80/80 tests, and the static safety gate
 
 To proceed beyond readiness, one of these must happen with explicit approval:
 
-1. A documented Atlantic token faucet/distribution funds the wallet, **and** a
-   documented swap/router plus vault/deposit protocol with verified addresses and
-   ABI is provided; or
-2. The user explicitly authorizes a separate task to deploy and verify test
-   contracts.
+1. **Provide a verified protocol.** A documented Atlantic swap/router and
+   vault/deposit address set with provenance and ABI is required. The token
+   funding prerequisite is now satisfied (20 USDC).
+2. **Or explicitly authorize a separate task to deploy test-only contracts.**
+   That plan is described in section 11.
 
 Only then can `testnet:plan` produce an executable plan. That plan must be
 reviewed (network, addresses, token amount, allowance, calldata, gas, maximum
 cost, postconditions) and its exact hash approved before `testnet:run` may sign
 or broadcast. No such approval exists yet.
+
+## 11. Proposed test-only deployment plan (NOT EXECUTED)
+
+This is a proposal for a **separate, explicitly approved** task. Nothing in this
+section has been written, compiled, deployed or signed.
+
+### Why
+
+There is no verified Atlantic swap/router or vault. The only safe way to
+demonstrate a live three-step saga is to deploy clearly labelled test-only
+contracts and verify their addresses and behavior before use. The governor
+address and arbitrary contracts are **not** substitutes.
+
+### Proposed contracts
+
+| Contract | Purpose | Trust boundary |
+| --- | --- | --- |
+| `TestOnlyReceiptToken` | mintable ERC-20 representing swap output | test-only; no value; mint/burn restricted to the test swap |
+| `TestOnlySwap` | `swapExactUsdcForReceipt(amountIn, minOut)` pulls official USDC via `transferFrom`, mints receipt tokens at a fixed 1:1 rate minus a documented test fee; `unwind(receiptAmount)` burns receipt tokens and returns USDC | test-only; fixed rate; no oracle; no owner drain |
+| `TestOnlyVault` | `deposit(receiptAmount)` pulls receipt tokens and credits shares; `withdraw(shares)` returns receipt tokens | test-only; no yield; no strategy |
+
+Using the official test USDC avoids deploying a fake stablecoin and keeps the
+approval target meaningful.
+
+### Proposed sequence (after separate approval)
+
+1. Deploy `TestOnlyReceiptToken`.
+2. Deploy `TestOnlySwap(USDC, receiptToken)`.
+3. Deploy `TestOnlyVault(receiptToken)`.
+4. Verify bytecode and constructor arguments on the explorer; record addresses.
+5. Fund the swap with a small USDC inventory if unwind liquidity is required.
+6. Run the saga with `amountIn = 1 USDC`:
+   - `APPROVE`: `approve(TestOnlySwap, 1 USDC)` — exact allowance, no unlimited
+     approval.
+   - `SWAP`: `swapExactUsdcForReceipt(1 USDC, minOut)`; verify receipt token
+     balance increase.
+   - `DEPOSIT`: `deposit(receiptAmount)`; verify vault shares increase.
+7. Use `testnet:plan` to produce the exact calldata, gas estimates and plan hash
+   for each step; approve the exact hash before `testnet:run`.
+
+### Rough cost expectation (not a quote)
+
+The wallet holds `0.542613955838483504 PHRS`. Three small contract deployments
+plus three saga transactions should cost far less than 0.1 PHRS at 10 gwei, but
+**exact gas is unknown until the contracts are compiled and estimated**. No gas
+number in this proposal is a commitment.
+
+### Tooling blocker
+
+Foundry (`forge`, `anvil`, `cast`) is **not installed** on this machine, and no
+Solidity compiler is available. The proposal cannot be executed until one of
+these is provided and approved. Installing Foundry was explicitly out of scope
+for the current task.
+
+### Safety rules for that separate task
+
+- Test-only contracts, clearly named and documented as non-official.
+- No mainnet, no real funds, no arbitrary protocol targets.
+- No unlimited approvals; exact allowance only.
+- Exact plan hash approval and `--confirm-atlantic-testnet` before any signature.
+- No blind resend after an unknown outcome.
+- If deployment or verification fails, stop and preserve evidence.

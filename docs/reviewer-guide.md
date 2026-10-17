@@ -10,8 +10,9 @@ This is the short path for reviewing the **Saga Executor** submission.
 > - **No live on-chain saga has executed.** There is no transaction hash to open
 >   on an explorer, and none is claimed.
 > - The separate Atlantic testnet adapter is **read-only and blocked** at the
->   readiness stage: the wallet has zero test ERC-20s, and no official Atlantic
->   router/vault exists. See [`testnet-readiness.md`](testnet-readiness.md).
+>   readiness stage: the wallet holds 20 test USDC, but no official Atlantic
+>   router/vault exists and the plan is blocked at the spender check. See
+>   [`testnet-readiness.md`](testnet-readiness.md).
 > - No mock contracts, Foundry project, local chain, deployment or broadcast was
 >   added for this submission.
 
