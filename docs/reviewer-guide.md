@@ -15,11 +15,16 @@ This is the short path for reviewing the **Saga Executor** submission.
 >   [`testnet-readiness.md`](testnet-readiness.md).
 > - **Test-only local validation was added.** Clearly labelled `TestOnly*` mock
 >   contracts and a disposable local Anvil chain (chainId 31337) run the real
->   executor with real local transactions (`npm run demo:local`). This is not
->   Atlantic or mainnet evidence.
+>   executor with real local transactions (`npm run demo:local`). A six-scenario
+>   safety check of the gated deployment runner (`npm run demo:deploy-tooling`)
+>   runs on the same kind of throwaway chains. This is not Atlantic or mainnet
+>   evidence.
 > - **An Atlantic deployment plan is prepared but not executed.** No `TestOnly*`
->   contract has been deployed to Atlantic; nothing was signed or broadcast. See
->   [`testnet-deployment-plan.md`](testnet-deployment-plan.md).
+>   contract has been deployed to Atlantic; nothing was signed or broadcast.
+>   The gated runner that would perform it exists, is locally tested, and has
+>   never run against Atlantic. See
+>   [`testnet-deployment-plan.md`](testnet-deployment-plan.md) and
+>   [`testnet-deployment-tooling.md`](testnet-deployment-tooling.md).
 
 ## 1. Requirements
 
@@ -35,7 +40,7 @@ npm install
 ## 2. Five-minute reproduction
 
 ```powershell
-# 87 tests + build + static safety gate
+# 95 tests + build + static safety gate
 npm run verify
 
 # Success: APPROVE -> SWAP -> DEPOSIT
@@ -54,6 +59,10 @@ npm run demo:unknown
 # Optional test-only local chain validation (requires Foundry in WSL):
 # real local transactions, 4 scenarios, chainId 31337 only
 npm run demo:local
+
+# Optional gated deploy-tooling check (local chains only): 6 scenarios,
+# wrong-chain refusal, forced revert, ambiguous outcome, bytecode mismatch
+npm run demo:deploy-tooling
 
 # Optional read-only Atlantic deployment plan (no signing, no broadcast)
 npm run testnet:deploy-plan -- --env-file <local-env> --address <wallet-address>
@@ -134,6 +143,7 @@ endpoint; installation is local via the `skills` CLI. See
 | No blind retry of unknown outcome | `demo:unknown`, `test/failure.test.ts` |
 | Real transaction path (test-only local chain) | `npm run demo:local`, `contracts/test/*.t.sol`, `docs/local-anvil.md` |
 | Atlantic deployment prepared without sending | `npm run testnet:deploy-plan`, `docs/testnet-deployment-plan.md`, plan hash |
+| Gated deployment safety (plan-hash gate, INTENT journal, no resend, bytecode verification) | `npm run demo:deploy-tooling`, `docs/testnet-deployment-tooling.md` |
 | Simulation honesty | `test/safety.test.ts`, `scripts/check-safety.mjs` |
 | Skill packaging | `SKILL.md`, `npx skills ... --list` |
 
@@ -141,16 +151,18 @@ endpoint; installation is local via the `skills` CLI. See
 
 ```text
 npm run verify
-87 tests, 87 pass, 0 fail
+95 tests, 95 pass, 0 fail
 SAFETY GATE PASSED
 exit code 0
 ```
 
 The original 61 simulation tests remain green; the suite later grew to 80 with
-the gated testnet adapter, then to **87** with local-anvil coverage (6 offline
-local tests, 1 additional isolation test) while keeping every earlier test
-passing. On top of that: **8 Foundry tests** pass locally and the **4-scenario
-local Anvil session** (`npm run demo:local`) passes.
+the gated testnet adapter, then to 87 with local-anvil coverage, and to **95**
+with the deploy-tooling tests (8 new offline tests) while keeping every
+earlier test passing. On top of that: **16 Foundry tests** pass locally
+(7 saga + 8 authorization + 1 gas measurement), the **4-scenario local Anvil
+session** (`npm run demo:local`) passes, and the **6-scenario deploy-tooling
+check** (`npm run demo:deploy-tooling`) passes.
 
 ## 7. Submission status
 
@@ -163,7 +175,8 @@ local Anvil session** (`npm run demo:local`) passes.
 | Live on-chain saga | **none executed** (Atlantic swap/vault still missing) |
 | Test-only local chain validation | added and passing (chainId 31337, clearly labelled mocks) |
 | Foundry toolchain | available in WSL Ubuntu (1.2.3-stable), documented in `docs/local-anvil.md` |
-| Atlantic deployment plan | prepared, read-only, **not executed**; awaiting explicit hash approval |
+| Atlantic deployment plan | regenerated (v2), read-only, **not executed**; awaiting explicit hash approval |
+| Gated deployment tooling | implemented and locally tested (6/6 scenarios); **never executed against Atlantic** |
 | Video | optional, not produced |
 | Agent Arena submission | not submitted |
 
@@ -174,9 +187,11 @@ local Anvil session** (`npm run demo:local`) passes.
 2. **No live Atlantic proof link exists.** The live plan is blocked by the
    missing official Atlantic router/vault; no tx hash is fabricated. The only
    real transactions so far are on a disposable local Anvil chain.
-3. **Atlantic deployment is not approved.** The plan hash
-   `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691` requires
-   separate explicit approval, and a reviewed deploy script does not exist yet.
+3. **Atlantic deployment is not approved.** The regenerated plan hash
+   `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806` requires
+   separate explicit approval. The gated deploy script now exists and passed
+   the local safety check, but it has never been run against Atlantic and will
+   refuse to send without the approval flag plus its own confirmation gate.
 4. Optional +50 video is not produced.
 
 No deployment, push or Agent Arena submission was performed.

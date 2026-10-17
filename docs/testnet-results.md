@@ -234,7 +234,7 @@ approval-gate, on-chain receipt, journal and safety-isolation tests.
 npm run verify
 ```
 
-Result: **PASS** — TypeScript build, 87/87 tests, and the static safety gate
+Result: **PASS** — TypeScript build, 95/95 tests, and the static safety gate
 (see [verified-output.md](verified-output.md) for the full recorded run).
 
 ## 10. What is required next
@@ -261,20 +261,27 @@ locally validated**, but still **not executed**. The current state:
   version 1.2.3-stable); it was not installed on the Windows side.
 - Four clearly labelled test-only contracts exist under `contracts/test-only/`:
   `TestOnlyUSDC`, `TestOnlyReceiptToken`, `TestOnlySwap` (1% test fee,
-  `unwind()` reverse path) and `TestOnlyVault` (1:1 shares). Fault hooks make
-  failures deterministic.
-- Eight Foundry tests pass locally, including deployment-gas measurement.
+  `unwind()` reverse path) and `TestOnlyVault` (1:1 shares). All settings,
+  mint/burn and fault hooks are restricted to the deployer as an immutable test
+  controller; fault hooks make failures deterministic.
+- Sixteen Foundry tests pass locally (7 saga + 8 authorization/sabotage +
+  1 deployment-gas measurement).
 - A **four-scenario local Anvil session** (`npm run demo:local`) runs the real
   executor with real local transactions: success, forced SWAP revert with
   `REVOKE_APPROVAL`, forced DEPOSIT revert with `SIMULATED_UNWIND_SWAP`, and an
   unknown SWAP outcome reconciled without resubmission. See
   [local-anvil.md](local-anvil.md).
-- A **read-only Atlantic deployment plan** was produced from live chain state:
+- A **gated deployment runner** for the Atlantic run is implemented and passed
+  a six-scenario local safety check (`npm run demo:deploy-tooling`); it has
+  never been executed against Atlantic. See
+  [testnet-deployment-tooling.md](testnet-deployment-tooling.md).
+- A **read-only Atlantic deployment plan** was regenerated from live chain
+  state after the contract hardening:
   [testnet-deployment-plan.md](testnet-deployment-plan.md).
-  - Plan hash: `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691`
-  - 4 deployments (USDC mock, receipt token, swap, vault), measured deploy gas
-    **1,972,442**, total gas cap **2,800,000**
-  - Maximum planned spend at the observed 10 gwei: **0.028 PHRS** (operator
+  - Plan hash (v2): `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`
+  - 5 transactions (USDC mock, receipt token, swap, vault + the explicit
+    minter-wiring call), measured gas **2,189,861**, total gas cap **3,400,000**
+  - Maximum planned spend at the observed 10 gwei: **0.034 PHRS** (operator
     ceiling 0.05 PHRS; wallet holds 0.5426 PHRS)
   - Predicted CREATE addresses are explicitly marked as predictions, valid only
     if the pending nonce (13) does not move first.
@@ -294,9 +301,13 @@ locally validated**, but still **not executed**. The current state:
 1. Explicit user approval of the exact plan hash above.
 2. Review of the plan document, including constructor arguments, gas caps,
    predicted addresses and the 0.05 PHRS ceiling.
-3. A separate, reviewed execution task with a dedicated deployment script
-   (INTENT journal before each send, no retry on ambiguous outcomes, receipt
-   verification, actual-address recording). That script does not exist yet.
+3. A separate execution task running the gated deploy script
+   (`scripts/testnet-deploy.ts`, documented in
+   [testnet-deployment-tooling.md](testnet-deployment-tooling.md)): it
+   force-rebuilds and re-verifies artifact hashes, journals INTENT before every
+   send, never resends an ambiguous outcome, and verifies receipts, bytecode
+   and addresses. The script now exists and passed its local safety check, but
+   it has never run against Atlantic.
 
 No `TestOnly*` contract has been deployed to Atlantic. No transaction has been
 sent by this project.

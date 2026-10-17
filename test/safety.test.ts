@@ -9,6 +9,16 @@ import { makeHarness } from './helpers.js';
 
 const ROOT = process.cwd();
 
+const localOnlyFilePaths = [
+  path.join(ROOT, 'src', 'adapters', 'localAnvil.ts'),
+  path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
+  path.join(ROOT, 'scripts', 'local-anvil.ts'),
+  path.join(ROOT, 'scripts', 'local-deploy-check.ts'),
+];
+
+/** The gated deployment CLI is the only script allowed to send (atlantic mode). */
+const testnetSendFilePaths = [path.join(ROOT, 'scripts', 'testnet-deploy.ts')];
+
 async function listFiles(dir: string): Promise<string[]> {
   const entries = await fs.readdir(dir, { withFileTypes: true });
   const files: string[] = [];
@@ -25,19 +35,17 @@ test('executable simulation source contains no wallet, signing, RPC or network s
     ...(await listFiles(path.join(ROOT, 'src'))),
     ...(await listFiles(path.join(ROOT, 'scripts'))),
   ].filter((file) => file.endsWith('.ts'));
-  const localOnlyFiles = new Set([
-    path.join(ROOT, 'src', 'adapters', 'localAnvil.ts'),
-    path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
-    path.join(ROOT, 'scripts', 'local-anvil.ts'),
-  ]);
+  const localOnlyFiles = new Set(localOnlyFilePaths);
   const testnetReadOnlyFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts')]);
+  const testnetSendFiles = new Set(testnetSendFilePaths);
   const simulationFiles = allFiles.filter(
     (file) =>
       !file.includes(`${path.sep}testnet${path.sep}`) &&
       !file.endsWith(`${path.sep}pharosTestnet.ts`) &&
       !file.endsWith(`${path.sep}viemTestnetClient.ts`) &&
       !localOnlyFiles.has(file) &&
-      !testnetReadOnlyFiles.has(file),
+      !testnetReadOnlyFiles.has(file) &&
+      !testnetSendFiles.has(file),
   );
   assert.ok(simulationFiles.length >= 20);
 
@@ -79,6 +87,7 @@ test('testnet adapter is isolated from mainnet and never targets rpc.pharos.xyz'
     ...(await listFiles(path.join(ROOT, 'src', 'testnet'))),
     path.join(ROOT, 'src', 'adapters', 'pharosTestnet.ts'),
     path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts'),
+    ...testnetSendFilePaths,
   ].filter((file) => file.endsWith('.ts'));
   assert.ok(testnetFiles.length >= 5);
   for (const file of testnetFiles) {
@@ -93,14 +102,25 @@ test('testnet adapter is isolated from mainnet and never targets rpc.pharos.xyz'
   const deployPlan = await fs.readFile(path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts'), 'utf8');
   assert.doesNotMatch(deployPlan, /sendTransaction|writeContract|deployContract|sendRawTransaction/);
   assert.doesNotMatch(deployPlan, /PRIVATE_KEY|privateKey|mnemonic/);
+
+  const deployCore = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'deployPlan.ts'), 'utf8');
+  assert.match(deployCore, /688689/);
+  assert.doesNotMatch(deployCore, /sendTransaction|writeContract|deployContract|privateKey|PRIVATE_KEY/);
+  const runner = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'deploy', 'runner.ts'), 'utf8');
+  assert.match(runner, /INTENT/);
+  assert.match(runner, /HARD_CEILING_WEI/);
+  assert.match(runner, /confirmAtlanticTestnet/);
+  assert.match(runner, /verifyRuntimeCode/);
+  const journal = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'deploy', 'journal.ts'), 'utf8');
+  assert.match(journal, /'INTENT'/);
+  const deployCli = await fs.readFile(path.join(ROOT, 'scripts', 'testnet-deploy.ts'), 'utf8');
+  assert.match(deployCli, /--confirm-atlantic-testnet/);
+  assert.match(deployCli, /--approve-plan/);
+  assert.match(deployCli, /keyProvider/);
 });
 
 test('local anvil adapter is isolated to a disposable chain and never targets Atlantic or mainnet', async () => {
-  const localFiles = [
-    path.join(ROOT, 'src', 'adapters', 'localAnvil.ts'),
-    path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
-    path.join(ROOT, 'scripts', 'local-anvil.ts'),
-  ];
+  const localFiles = [...localOnlyFilePaths];
   for (const file of localFiles) {
     assert.equal(existsSync(file), true, `missing local-only file ${path.relative(ROOT, file)}`);
     const source = await fs.readFile(file, 'utf8');

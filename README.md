@@ -31,18 +31,20 @@ as an installable agent skill for the Pharos Agent Arena task
 > [`docs/local-anvil.md`](docs/local-anvil.md). This is **not** Atlantic or
 > mainnet evidence.
 >
-> **Atlantic deployment plan (prepared, not executed):** a read-only plan for
-> deploying the four `TestOnly*` contracts to Atlantic testnet is in
-> [`docs/testnet-deployment-plan.md`](docs/testnet-deployment-plan.md).
-> Nothing was signed or broadcast; deployment requires a separate explicit
-> approval of the plan hash.
+> **Atlantic deployment plan + gated tooling (prepared, not executed):** a
+> read-only plan (plan hash `7e1050c9…d4d806`) and a gated deployment runner
+> for the four `TestOnly*` contracts are ready. Nothing was signed or
+> broadcast; deployment requires explicit approval of the plan hash plus the
+> full gate chain described in
+> [`docs/testnet-deployment-tooling.md`](docs/testnet-deployment-tooling.md).
 
 - Node.js 20+ (verified on Node 24.14.1)
 - Simulation path has no wallet, RPC or network calls; `viem` is used only by the
   gated testnet adapter and the local/testnet read-only tooling
 - State machine, retry policy, compensation, persistence, CLI and tests
-- **87 offline automated tests**, plus **8 Foundry contract/gas tests** and a
-  **4-scenario local Anvil session** (`npm run demo:local`, test-only)
+- **95 offline automated tests**, plus **16 Foundry contract tests** and two
+  local safety sessions: a **4-scenario Anvil saga demo** (`npm run demo:local`)
+  and a **6-scenario deploy-tooling check** (`npm run demo:deploy-tooling`)
 
 ---
 
@@ -62,6 +64,7 @@ as an installable agent skill for the Pharos Agent Arena task
 - [Testnet readiness (read-only)](#testnet-readiness-read-only)
 - [Local Anvil validation (test-only)](#local-anvil-validation-test-only)
 - [Atlantic deployment plan (prepared, not executed)](#atlantic-deployment-plan-prepared-not-executed)
+- [Gated Atlantic deployment tooling (test-only)](#gated-atlantic-deployment-tooling-test-only)
 - [Skill packaging and environment](#skill-packaging-and-environment)
 - [Tests and verification](#tests-and-verification)
 - [Safety](#safety)
@@ -83,7 +86,7 @@ npm run demo:manual
 npm run demo:unknown
 ```
 
-Expected: **87 tests pass**, then four simulation demos ending in `COMPLETED`,
+Expected: **95 tests pass**, then four simulation demos ending in `COMPLETED`,
 `FAILED` (compensation success), `MANUAL_RECOVERY_REQUIRED` (compensation
 failure), and `MANUAL_RECOVERY_REQUIRED` (unknown outcome).
 
@@ -93,6 +96,7 @@ Optional local-only extra (requires Foundry in WSL, see
 ```powershell
 wsl.exe -d Ubuntu -- /bin/bash --noprofile --norc -c 'cd /mnt/c/pharos-saga-executor && /home/wyka/.foundry/bin/forge test -vv'
 npm run demo:local
+npm run demo:deploy-tooling
 ```
 
 Optional read-only Atlantic deployment plan (requires the local env file and
@@ -144,6 +148,7 @@ project therefore implements **honest compensation**, never a fake rollback:
 | Deterministic clock and jitter in tests | `VirtualClock`, injectable `JitterSource` | `test/helpers.ts` |
 | Real local chain execution, test-only | `LocalAnvilAdapter`, `TestOnly*` contracts, state guard 31337 | `npm run demo:local`, `contracts/test/*.t.sol` |
 | Atlantic deployment prepared without sending | read-only plan script, stable plan hash, bytecode hashes | `docs/testnet-deployment-plan.md`, `npm run testnet:deploy-plan` |
+| Gated Atlantic deployment tooling, test-only | gated runner, INTENT journal, PHRS ceiling, plan-hash + confirmation gates | `npm run demo:deploy-tooling`, `docs/testnet-deployment-tooling.md` |
 
 ## Quick start
 
@@ -522,12 +527,35 @@ predicted CREATE addresses and a stable plan hash. The script has no send or
 sign path (enforced by the safety gate), never reads the private key, and
 nothing was broadcast.
 
-- Plan hash: `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691`
-- Maximum planned spend at 10 gwei: **0.028 PHRS**, operator ceiling **0.05 PHRS**
+- Plan hash (v2, after the F-1 contract hardening):
+  `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`
+- Five transactions: 4 deployments + the explicit minter-wiring call
+- Total gas cap **3,400,000**; maximum planned spend at 10 gwei: **0.034 PHRS**,
+  operator ceiling **0.05 PHRS**
 - Full plan: [`docs/testnet-deployment-plan.md`](docs/testnet-deployment-plan.md)
 
 Execution is a separate, explicitly approved future task; the predicted
-addresses are not valid until deployment receipts exist.
+addresses are not valid until deployment receipts exist. The gated runner that
+would perform it is described in the next section and has only ever been run
+against disposable local chains.
+
+## Gated Atlantic deployment tooling (test-only)
+
+The deployment path is a separate gated runner (the only code that can send):
+
+- `scripts/testnet-deploy.ts` — CLI; atlantic mode requires
+  `--approve-plan <hash>` **and** `--confirm-atlantic-testnet`, force-rebuilds
+  the contracts, re-verifies every artifact hash, re-reads chainId / nonce /
+  gas price / balance, enforces the 0.05 PHRS ceiling, journals `INTENT`
+  before every send, verifies every receipt, deployed bytecode and address,
+  and never resends an ambiguous outcome;
+- `scripts/local-deploy-check.ts` — the same runner against disposable local
+  chains; recorded **6/6 scenarios PASS**: happy path (plus on-chain
+  authorization checks), wrong-chain refusal, forced revert, ambiguous
+  outcome (never resent), runtime-bytecode mismatch, and tampered immutable
+  slot.
+
+Full details: [`docs/testnet-deployment-tooling.md`](docs/testnet-deployment-tooling.md).
 
 ## Skill packaging and environment
 
@@ -583,16 +611,19 @@ npm run verify
   links, chainId 31337 only), bounded vault allowance rules, and the durable
   local journal (INTENT before send);
 - static safety checks, including isolation of the local-anvil files from
-  Atlantic/mainnet targets and a read-only assertion on the deployment plan script.
+  Atlantic/mainnet targets, a read-only assertion on the deployment plan script,
+  and the deployment-tooling invariants (INTENT journal before sends, PHRS hard
+  ceiling, mandatory confirmation flag, runtime-code verification, lazy key load).
 
 The suite uses `VirtualClock`, fixed jitter, a fake testnet client and temporary
 state directories, so it needs no wallet, live network, real funds or real-time
 retry waits. Exact test counts and command output are recorded in
 [`docs/verified-output.md`](docs/verified-output.md).
 
-The separate Foundry suite (`contracts/test/*.t.sol`, 8 tests) and the four-scenario
-local Anvil session (`npm run demo:local`) are documented in
-[`docs/local-anvil.md`](docs/local-anvil.md).
+The separate Foundry suite (`contracts/test/*.t.sol`, 16 tests) and the local
+safety sessions - the four-scenario saga demo (`npm run demo:local`) and the
+six-scenario deploy-tooling check (`npm run demo:deploy-tooling`) - are
+documented in [`docs/local-anvil.md`](docs/local-anvil.md).
 
 ## Safety
 
@@ -621,7 +652,8 @@ local Anvil session (`npm run demo:local`) are documented in
   Atlantic testnet evidence.
 - The Atlantic deployment plan is prepared but **not executed**: no `TestOnly*`
   contract has been deployed to Atlantic, and predicted CREATE addresses are not
-  valid until real deployment receipts exist.
+  valid until real deployment receipts exist. A gated runner for it exists and
+  is locally tested, but it has never run against Atlantic.
 - No mainnet adapter exists. Mainnet is explicitly rejected.
 - The simulated ledger is serialised within one process; the testnet journal is
   also single-process.

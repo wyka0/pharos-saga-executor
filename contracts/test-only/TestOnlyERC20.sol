@@ -2,9 +2,12 @@
 pragma solidity 0.8.24;
 
 /**
- * TEST-ONLY ERC-20 used by the local Anvil saga demo.
- * It is NOT an official Pharos token and must never be deployed to Atlantic
- * testnet or mainnet by this project.
+ * TEST-ONLY ERC-20 base for the TestOnly* mock ecosystem (local Anvil and the
+ * clearly-labelled Atlantic testnet deployment). It is NOT an official Pharos
+ * token and must never be presented as one or deployed to mainnet.
+ *
+ * Supply and authorization are controlled by the immutable test controller in
+ * TestOnlyTokens.sol; this base only provides minimal ERC-20 mechanics.
  */
 contract TestOnlyERC20 {
     string public name;

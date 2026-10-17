@@ -1,6 +1,7 @@
 {
-  "TestOnlyReceiptToken": "568661",
-  "TestOnlySwap": "484536",
-  "TestOnlyUSDC": "497738",
-  "TestOnlyVault": "421507"
+  "TestOnlyReceiptToken": "611864",
+  "TestOnlySwap": "518281",
+  "TestOnlyUSDC": "557441",
+  "TestOnlyVault": "478683",
+  "WireMinter": "23592"
 }

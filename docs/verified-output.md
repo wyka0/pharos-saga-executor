@@ -753,6 +753,10 @@ wsl.exe -d Ubuntu -- /bin/bash --noprofile --norc -c 'cd /mnt/c/pharos-saga-exec
 Result: **8 tests passed, 0 failed** across 2 suites
 (`TestOnlySagaTest` = 7, `DeploymentGasTest` = 1).
 
+> Superseded by [section 11](#11-iteration-4--contract-hardening-f-1--gated-deployment-tooling):
+> after the F-1 hardening the suite is **16 tests** and every gas number below
+> changed.
+
 Measured deployment gas (also written to `snapshots/DeploymentGasTest.json`):
 
 | Contract | Deploy gas (local EVM) |
@@ -800,6 +804,10 @@ gas price 10 gwei, PHRS balance 0.542613955838483504, USDC 20.0.
 - Predicted CREATE addresses are explicitly marked as predictions; no address is
   claimed as deployed.
 
+> Superseded by [section 11.4](#114-atlantic-deployment-plan-regenerated-read-only-nothing-sent):
+> the contracts changed (F-1 hardening + minter-wiring transaction), so this v1
+> hash is void and must never be approved.
+
 The plan script has no send/sign/broadcast path and never references the signing
 key; `npm run verify` fails if that changes. Full plan:
 [`testnet-deployment-plan.md`](testnet-deployment-plan.md).
@@ -831,3 +839,118 @@ Atlantic/mainnet and the read-only property of the deployment plan script.
 
 Local success is never presented as Atlantic evidence, and predicted addresses
 are never presented as deployed addresses.
+
+---
+
+# Iteration 4 — contract hardening (F-1) + gated deployment tooling
+
+Date: **2026-10-18**
+Status: **nothing signed or broadcast.** The Atlantic deployment remains
+unauthorized; the plan below is prepared for explicit approval only.
+
+## 11.1 Contract hardening (F-1)
+
+The `TestOnly*` mocks now store the deployer as an immutable `controller`:
+mint, burn, `setMinter` and every fault hook are restricted to it, the swap
+constructor makes no external call, and the receipt token's minter is wired by
+an explicit fifth transaction. Unauthorized callers and sabotage attempts are
+covered by 8 dedicated Foundry tests and by live checks in the local demos
+(second account; both attempts revert on-chain).
+
+## 11.2 Foundry verification (final run)
+
+```text
+forge build --force -> Compiler run successful (26 files, Solc 0.8.24)
+
+Ran 3 test suites: 16 tests passed, 0 failed, 0 skipped (16 total tests)
+  TestOnlyAuth.t.sol      8/8  (unauthorized callers, sabotage, wiring, zero-controller)
+  TestOnlySaga.t.sol      7/7
+  DeploymentGas.t.sol     1/1
+```
+
+Measured execution gas (final):
+
+| Step | Gas |
+| --- | ---: |
+| `TestOnlyUSDC` deploy | 557,441 |
+| `TestOnlyReceiptToken` deploy | 611,864 |
+| `TestOnlySwap` deploy | 518,281 |
+| `TestOnlyVault` deploy | 478,683 |
+| `WireMinter` call | 23,592 |
+| **Total** | **2,189,861** |
+
+## 11.3 Gated deployment tooling
+
+New artifacts: shared plan core (`src/testnet/deployPlan.ts`), verification
+helpers (`src/testnet/deploy/verify.ts`), durable INTENT journal
+(`src/testnet/deploy/journal.ts`), the gated runner
+(`src/testnet/deploy/runner.ts`, the only send path), the CLI
+(`scripts/testnet-deploy.ts`) and a six-scenario Anvil safety check
+(`scripts/local-deploy-check.ts`). The formula: force-rebuild -> plan-hash
+gate -> confirmation flag -> chain guard -> nonce/gas/balance re-read + 0.05
+PHRS ceiling -> lazy key load -> INTENT journal -> exactly one send -> receipt
++ deployed bytecode + immutable getter + address verification; ambiguous
+outcomes are never resent and any mismatch stops the run.
+
+Recorded final result of `npm run demo:deploy-tooling` (**6/6 scenarios
+PASS**):
+
+| Scenario | Result |
+| --- | --- |
+| A happy path | COMPLETE; 4 deploys + wiring all CONFIRMED; 5/5 journal entries; predicted = actual addresses; unauthorized `setMinter`/`mint` from a second account revert on-chain |
+| B wrong chain (5) | refused before any send; no journal file created |
+| C forced revert | REVERTED entry for the receipt token; exactly 2 sends; no further steps |
+| D ambiguous outcome | UNKNOWN entry; exactly 1 broadcast; after mining the block holds exactly 1 tx; never resubmitted |
+| E1 runtime-bytecode mismatch | `deployed bytecode differs from the approved artifact outside immutable slots`; stopped before the wiring tx |
+| E2 tampered immutable slot | getter check catches `controller mismatch` (masked comparison ignores slots by design) |
+
+## 11.4 Atlantic deployment plan (regenerated, READ-ONLY, nothing sent)
+
+Observed at plan time: chainId 688689, block 31546237, pending nonce 13, gas
+price 10 gwei, PHRS balance 0.542613955838483504, USDC 20.0.
+
+- Total gas cap: **3,400,000** across 5 transactions (4 deploys + wiring)
+- Maximum planned spend at 10 gwei: **0.034 PHRS** (operator ceiling 0.05 PHRS;
+  implies a maximum executable gas price of ~14.7 gwei)
+- Stable plan hash (v2 — supersedes the iteration-3 v1 hash, which must never
+  be approved): `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`
+- Per-step init-code hashes, constructor args and caps:
+  [`testnet-deployment-plan.md`](testnet-deployment-plan.md).
+- Predicted CREATE addresses remain predictions; no address is claimed as
+  deployed.
+
+## 11.5 Final verification (iteration 4)
+
+```text
+> npm run verify
+build: tsc -p tsconfig.json (exit 0)
+tests: 95 tests, 95 pass, 0 fail, 0 skipped (~33.7 s)
+safety gate: SAFETY GATE PASSED - simulation stays offline; testnet path is gated and mainnet-free.
+exit code 0
+```
+
+Test distribution: 10 state machine + 4 success + 7 retry + 13 failure +
+9 persistence + 7 audit + 4 CLI + 9 safety + 17 testnet + 6 local-anvil +
+8 deploy-tooling = **95**. The 61 original simulation tests remain green.
+
+Additional recorded runs (final):
+
+- `forge build --force`: compiler run successful, 26 files, Solc 0.8.24.
+- `forge test -vv`: 16/16 pass (see 11.2).
+- `npm run demo:local`: 4/4 scenarios PASS with the hardened contracts and the
+  explicit minter-wiring transaction.
+- `npm run demo:deploy-tooling`: 6/6 scenarios PASS (see 11.3).
+
+## 11.6 Classification (iteration 4)
+
+| Artifact | Classification |
+| --- | --- |
+| `demo:deploy-tooling` transactions | **REAL transactions on disposable local chains (chainId 31337 / test chainId 5)**; not testnet evidence |
+| Foundry tests + gas numbers | **LOCAL EVM**, offline |
+| `npm run testnet:deploy-plan` output | **LIVE READ-ONLY** Atlantic chain data; no transaction |
+| `TestOnly*` on Atlantic | **not deployed** (nonexistent until an approved separate task) |
+| Atlantic/mainnet transactions by this project | **still 0** |
+
+The gated runner has never been executed against Atlantic; only its local mode
+(`--mode local-anvil`) has run. The Atlantic mode requires the new plan hash
+to be explicitly approved first, and no such approval has been given.

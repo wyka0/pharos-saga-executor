@@ -51,10 +51,13 @@ but currently **blocked** by the missing verified protocol prerequisite.
 >
 > **Local validation path: TEST-ONLY (chainId 31337).** `npm run demo:local`
 > runs the real executor against a disposable local Anvil chain with clearly
-> labelled `TestOnly*` mock contracts. This is real execution on a throwaway
-> chain, not a simulation flag and not Atlantic evidence. A read-only Atlantic
-> deployment plan for the same mocks is prepared but **not executed**
-> (`docs/testnet-deployment-plan.md`).
+> labelled `TestOnly*` mock contracts. `npm run demo:deploy-tooling` exercises
+> the gated deployment runner with six safety scenarios (wrong chain, forced
+> revert, ambiguous outcome, bytecode mismatch, tampered immutable). These are
+> real executions on throwaway chains, not simulation flags and not Atlantic
+> evidence. A read-only Atlantic deployment plan for the same mocks is prepared
+> but **not executed**; the gated runner for it has never run against Atlantic
+> (`docs/testnet-deployment-plan.md`, `docs/testnet-deployment-tooling.md`).
 
 The skill must **never**:
 
@@ -157,8 +160,15 @@ npm run demo:unknown
 # test-only real transactions on a disposable local Anvil chain (chainId 31337)
 npm run demo:local
 
+# six-scenario safety check of the gated deployment runner (local chains only)
+npm run demo:deploy-tooling
+
 # read-only Atlantic deployment plan for the TestOnly* mocks; sends nothing
 npm run testnet:deploy-plan -- --env-file <local-env> --address <wallet-address>
+
+# ONLY after explicit approval of the plan hash - this one SIGNS AND BROADCASTS:
+# npm run testnet:deploy -- --mode atlantic --env-file <local-env> `
+#   --address <wallet-address> --approve-plan <hash> --confirm-atlantic-testnet
 
 # build + tests + static safety scan
 npm run verify
@@ -271,14 +281,19 @@ Generated state is git-ignored and must not be committed.
   duplicate/idempotent execution, persistence/resume, illegal transitions,
   audit ordering, unknown outcomes, testnet readiness/plan gating, reverted and
   unknown sends, postconditions, read retries, mainnet rejection, local-anvil
-  configuration/receipt/journal rules and safety (87 tests).
+  configuration/receipt/journal rules, the deploy tooling (plan hash, runtime
+  verification, INTENT journal) and safety (95 tests).
 - `npm run verify` also builds and runs `scripts/check-safety.mjs`, which now
-  also enforces that the local-anvil files never target Atlantic/mainnet and
-  that the deployment plan script has no send/sign path.
-- Foundry (`contracts/test/*.t.sol`, 8 tests) and the four-scenario local Anvil
-  session are documented in [`docs/local-anvil.md`](docs/local-anvil.md).
+  also enforces that the local-anvil files never target Atlantic/mainnet, that
+  the deployment plan script has no send/sign path, and that the gated runner
+  keeps its invariants (INTENT journal, PHRS ceiling, confirmation flag,
+  runtime-code verification, lazy key load).
+- Foundry (`contracts/test/*.t.sol`, 16 tests), the four-scenario local Anvil
+  session and the six-scenario deploy-tooling check are documented in
+  [`docs/local-anvil.md`](docs/local-anvil.md).
 - See [`docs/verified-output.md`](docs/verified-output.md),
   [`docs/testnet-readiness.md`](docs/testnet-readiness.md),
-  [`docs/testnet-results.md`](docs/testnet-results.md) and
-  [`docs/testnet-deployment-plan.md`](docs/testnet-deployment-plan.md) for exact
-  commands and recorded results.
+  [`docs/testnet-results.md`](docs/testnet-results.md),
+  [`docs/testnet-deployment-plan.md`](docs/testnet-deployment-plan.md) and
+  [`docs/testnet-deployment-tooling.md`](docs/testnet-deployment-tooling.md) for
+  exact commands and recorded results.

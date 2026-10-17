@@ -43,6 +43,7 @@ const ERC20_ABI = parseAbi([
 ]);
 const ERC20_APPROVE_ABI = parseAbi(['function approve(address spender, uint256 amount) returns (bool)']);
 const USDC_ADMIN_ABI = parseAbi(['function mint(address to, uint256 amount)']);
+const RECEIPT_MINTER_ABI = parseAbi(['function setMinter(address minter, bool allowed)']);
 const SWAP_FAULT_ABI = parseAbi(['function setFailNextSwap(bool value)']);
 const VAULT_FAULT_ABI = parseAbi(['function setFailNextDeposit(bool value)']);
 const VAULT_SHARES_ABI = parseAbi(['function sharesOf(address owner) view returns (uint256)']);
@@ -311,10 +312,18 @@ async function main(): Promise<void> {
     const swapArt = await loadArtifact('TestOnlySwap.sol/TestOnlySwap.json');
     const vaultArt = await loadArtifact('TestOnlyVault.sol/TestOnlyVault.json');
 
-    const usdc = await deploy(wallet, publicClient, usdcArt);
-    const receiptToken = await deploy(wallet, publicClient, receiptArt);
-    const swap = await deploy(wallet, publicClient, swapArt, [usdc, receiptToken, SWAP_FEE_BPS]);
-    const vault = await deploy(wallet, publicClient, vaultArt, [receiptToken]);
+    const usdc = await deploy(wallet, publicClient, usdcArt, [OWNER]);
+    const receiptToken = await deploy(wallet, publicClient, receiptArt, [OWNER]);
+    const swap = await deploy(wallet, publicClient, swapArt, [usdc, receiptToken, SWAP_FEE_BPS, OWNER]);
+    const vault = await deploy(wallet, publicClient, vaultArt, [receiptToken, OWNER]);
+    // The receipt token only accepts a minter set by its immutable test controller
+    // (OWNER). This mirrors the wiring transaction of the gated deployment script.
+    await write(wallet, publicClient, {
+      address: receiptToken,
+      abi: RECEIPT_MINTER_ABI,
+      functionName: 'setMinter',
+      args: [swap, true],
+    });
     await write(wallet, publicClient, {
       address: usdc,
       abi: USDC_ADMIN_ABI,

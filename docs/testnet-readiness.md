@@ -279,15 +279,20 @@ progressed, still **without any Atlantic transaction**:
   No PATH or shell profile was changed.
 - **Test-only contracts exist and compile**: `contracts/test-only/`
   (`TestOnlyUSDC`, `TestOnlyReceiptToken`, `TestOnlySwap`, `TestOnlyVault`),
-  plus 8 passing Foundry tests including a deployment-gas measurement.
+  plus 16 passing Foundry tests (7 saga + 8 authorization/sabotage + 1
+  deployment-gas measurement).
 - **Local end-to-end validation passed** on a disposable Anvil chain
   (chainId 31337): success, forced SWAP revert with `REVOKE_APPROVAL`, forced
   DEPOSIT revert with `SIMULATED_UNWIND_SWAP`, and unknown-outcome
-  reconciliation with no resubmission (`npm run demo:local`).
-- **Atlantic deployment plan prepared (read-only, NOT executed)**:
-  [`testnet-deployment-plan.md`](testnet-deployment-plan.md), plan hash
-  `cf458108d271c3a3f9cc9b7daa96de37bf499405cf2b8e39d5ef975bc540d691`,
-  2,800,000 total gas cap, 0.028 PHRS planned spend at 10 gwei.
+  reconciliation with no resubmission (`npm run demo:local`), plus a
+  six-scenario gated-deployment safety check (`npm run demo:deploy-tooling`).
+- **Atlantic deployment plan regenerated (read-only, NOT executed)**:
+  [`testnet-deployment-plan.md`](testnet-deployment-plan.md), plan hash (v2)
+  `7e1050c9717789fce229945649acbc21baaed46f67346967a8d74362edd4d806`,
+  3,400,000 total gas cap across 5 transactions, 0.034 PHRS planned spend at
+  10 gwei. The gated runner described in
+  [testnet-deployment-tooling.md](testnet-deployment-tooling.md) has never run
+  against Atlantic.
 
 No `TestOnly*` contract has been deployed to Atlantic. Deployment remains a
 separate, explicitly approved task; see the plan document for preconditions.

@@ -4,19 +4,25 @@ pragma solidity 0.8.24;
 import {TestOnlyUSDC, TestOnlyReceiptToken} from "./TestOnlyTokens.sol";
 
 /**
- * TEST-ONLY fixed-rate swap for the local Anvil saga.
+ * TEST-ONLY fixed-rate swap for the TestOnly* mock ecosystem.
  *
- * - pulls tUSDC with transferFrom
+ * - pulls tUSDC with transferFrom(msg.sender, ...) ONLY (never another wallet)
  * - mints tSAGA at a fixed rate (default 99%)
- * - supports unwind (burn tSAGA, return tUSDC at the same rate)
+ * - unwind: burns the caller's tSAGA and returns tUSDC from this contract's own
+ *   balance at the same rate
  *
- * It is NOT an official Pharos protocol, has no oracle, no admin drain and must
- * never be presented as a real DEX.
+ * It is NOT an official Pharos protocol, has no oracle, no admin drain and no
+ * arbitrary external calls. Fault-injection hooks are restricted to the
+ * immutable test controller. The tSAGA minter role is NOT wired here: the
+ * gated deployment script calls TestOnlyReceiptToken.setMinter(swap, true)
+ * after both contracts exist, so this constructor performs no cross-contract
+ * calls at all.
  */
 contract TestOnlySwap {
     TestOnlyUSDC public immutable usdc;
     TestOnlyReceiptToken public immutable receipt;
     uint256 public immutable feeBps;
+    address public immutable controller;
 
     bool public failNextSwap;
     bool public failNextUnwind;
@@ -24,20 +30,28 @@ contract TestOnlySwap {
     event Swapped(address indexed user, uint256 usdcIn, uint256 receiptOut);
     event Unwound(address indexed user, uint256 receiptIn, uint256 usdcOut);
 
-    constructor(TestOnlyUSDC usdc_, TestOnlyReceiptToken receipt_, uint256 feeBps_) {
+    constructor(
+        TestOnlyUSDC usdc_,
+        TestOnlyReceiptToken receipt_,
+        uint256 feeBps_,
+        address controller_
+    ) {
         require(feeBps_ <= 1_000, "fee too high");
+        require(controller_ != address(0), "swap: zero controller");
         usdc = usdc_;
         receipt = receipt_;
         feeBps = feeBps_;
-        receipt.setMinter(address(this), true);
+        controller = controller_;
     }
 
-    /// @notice Test-only fault injection for local failure-path tests.
+    /// @notice Test-only fault injection, restricted to the immutable test controller.
     function setFailNextSwap(bool value) external {
+        require(msg.sender == controller, "swap: not controller");
         failNextSwap = value;
     }
 
     function setFailNextUnwind(bool value) external {
+        require(msg.sender == controller, "swap: not controller");
         failNextUnwind = value;
     }
 

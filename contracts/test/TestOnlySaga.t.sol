@@ -20,10 +20,11 @@ contract TestOnlySagaTest is Test {
     uint256 internal constant ONE_USDC = 1_000_000; // 6 decimals
 
     function setUp() public {
-        usdc = new TestOnlyUSDC();
-        receipt = new TestOnlyReceiptToken();
-        swap = new TestOnlySwap(usdc, receipt, 100); // 1% test fee
-        vault = new TestOnlyVault(receipt);
+        usdc = new TestOnlyUSDC(address(this));
+        receipt = new TestOnlyReceiptToken(address(this));
+        swap = new TestOnlySwap(usdc, receipt, 100, address(this)); // 1% test fee
+        receipt.setMinter(address(swap), true); // controller wires the only minter (mirrors the deployment script)
+        vault = new TestOnlyVault(receipt, address(this));
         usdc.mint(user, 100 * ONE_USDC);
     }
 

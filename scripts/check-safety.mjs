@@ -71,8 +71,17 @@ const required = [
   'contracts/test-only/TestOnlyVault.sol',
   'contracts/test/TestOnlySaga.t.sol',
   'contracts/test/DeploymentGas.t.sol',
+  'contracts/test/TestOnlyAuth.t.sol',
   'docs/local-anvil.md',
   'docs/testnet-deployment-plan.md',
+  'docs/testnet-deployment-tooling.md',
+  'src/testnet/deployPlan.ts',
+  'src/testnet/deploy/runner.ts',
+  'src/testnet/deploy/verify.ts',
+  'src/testnet/deploy/journal.ts',
+  'scripts/testnet-deploy.ts',
+  'scripts/local-deploy-check.ts',
+  'test/deploy-tooling.test.ts',
 ];
 for (const relative of required) {
   check(existsSync(path.join(ROOT, relative)), `required file exists: ${relative}`);
@@ -87,9 +96,13 @@ const localOnlyFiles = new Set([
   path.join(ROOT, 'src', 'adapters', 'localAnvil.ts'),
   path.join(ROOT, 'src', 'persistence', 'localJournal.ts'),
   path.join(ROOT, 'scripts', 'local-anvil.ts'),
+  path.join(ROOT, 'scripts', 'local-deploy-check.ts'),
 ]);
 
 const testnetReadOnlyFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy-plan.ts')]);
+
+/** The gated deployment CLI is the only script allowed to send (atlantic mode). */
+const testnetSendFiles = new Set([path.join(ROOT, 'scripts', 'testnet-deploy.ts')]);
 
 const simulationFiles = allTs.filter(
   (file) =>
@@ -97,7 +110,8 @@ const simulationFiles = allTs.filter(
     !file.endsWith(`${path.sep}pharosTestnet.ts`) &&
     !file.endsWith(`${path.sep}viemTestnetClient.ts`) &&
     !localOnlyFiles.has(file) &&
-    !testnetReadOnlyFiles.has(file),
+    !testnetReadOnlyFiles.has(file) &&
+    !testnetSendFiles.has(file),
 );
 const simulationForbidden = [
   'PRIVATE_KEY',
@@ -141,6 +155,7 @@ const testnetFiles = [
   ...walk(path.join(ROOT, 'src', 'testnet')),
   path.join(ROOT, 'src', 'adapters', 'pharosTestnet.ts'),
   ...testnetReadOnlyFiles,
+  ...testnetSendFiles,
 ].filter((file) => file.endsWith('.ts'));
 let testnetHits = 0;
 for (const file of testnetFiles) {
@@ -169,6 +184,43 @@ check(
   !/PRIVATE_KEY|privateKey|mnemonic/.test(deployPlan),
   'deployment plan script never references signing secrets',
 );
+
+const deployCorePath = path.join(ROOT, 'src', 'testnet', 'deployPlan.ts');
+const deployCore = readFileSync(deployCorePath, 'utf8');
+check(
+  deployCore.includes('688689'),
+  'shared plan module is pinned to the Atlantic chainId 688689',
+);
+check(
+  !/sendTransaction|writeContract|deployContract|sendRawTransaction|eth_sendTransaction|privateKey|PRIVATE_KEY|mnemonic/.test(
+    deployCore,
+  ),
+  'shared plan module has no send/sign/secret path',
+);
+const deployRunnerPath = path.join(ROOT, 'src', 'testnet', 'deploy', 'runner.ts');
+const deployRunner = readFileSync(deployRunnerPath, 'utf8');
+check(deployRunner.includes('INTENT'), 'deploy runner journals INTENT before sending');
+check(deployRunner.includes('HARD_CEILING_WEI'), 'deploy runner enforces the PHRS hard ceiling');
+check(
+  /confirmAtlanticTestnet/.test(deployRunner),
+  'deploy runner requires the explicit Atlantic confirmation flag',
+);
+check(/verifyRuntimeCode/.test(deployRunner), 'deploy runner verifies deployed runtime code');
+check(
+  /resent/.test(deployRunner) && deployRunner.includes('UNKNOWN') && deployRunner.includes('REVERTED'),
+  'deploy runner marks ambiguous/reverted outcomes and never resends',
+);
+const deployJournalPath = path.join(ROOT, 'src', 'testnet', 'deploy', 'journal.ts');
+const deployJournalText = readFileSync(deployJournalPath, 'utf8');
+check(deployJournalText.includes("'INTENT'"), 'deploy journal defines the INTENT status');
+const deployCliPath = path.join(ROOT, 'scripts', 'testnet-deploy.ts');
+const deployCli = readFileSync(deployCliPath, 'utf8');
+check(
+  deployCli.includes('--confirm-atlantic-testnet'),
+  'deploy CLI requires --confirm-atlantic-testnet for atlantic mode',
+);
+check(deployCli.includes('--approve-plan'), 'deploy CLI requires an approved plan hash');
+check(/keyProvider/.test(deployCli), 'deploy CLI reads the signing key lazily at first send');
 
 const localFiles = [...localOnlyFiles].filter((file) => existsSync(file));
 let localHits = 0;
