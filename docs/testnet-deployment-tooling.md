@@ -16,7 +16,7 @@ It complements `docs/testnet-deployment-plan.md` (the read-only plan) and
 | `src/testnet/deploy/journal.ts` | durable deployment journal (`INTENT` written before any send) |
 | `src/testnet/deploy/runner.ts` | the only send path: gates + one send per step + receipt/bytecode/address verification |
 | `scripts/testnet-deploy.ts` | gated CLI (`--mode atlantic` / `--mode local-anvil`) |
-| `scripts/local-deploy-check.ts` | five-scenario Anvil safety check (`npm run demo:deploy-tooling`) |
+| `scripts/local-deploy-check.ts` | six-scenario Anvil safety check (`npm run demo:deploy-tooling`) |
 
 Static guarantees enforced by `scripts/check-safety.mjs` and
 `test/safety.test.ts`: the shared plan module contains no send/sign/secret
