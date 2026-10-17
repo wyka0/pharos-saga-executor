@@ -90,6 +90,19 @@ test('CLI --no-run persists CREATED and a later run completes the same saga', as
   assert.equal((JSON.parse(resumed.stdout) as { state: string }).state, 'COMPLETED');
 });
 
+test('testnet CLI refuses execution without explicit approval and confirmation gates', async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'pharos-saga-cli-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+
+  const noConfirm = runCli(['testnet:run', 'saga_any', '--state-dir', dir], dir);
+  assert.equal(noConfirm.status, 64);
+  assert.match(noConfirm.stderr, /confirm-atlantic-testnet/i);
+
+  const noEnv = runCli(['testnet:readiness', '--state-dir', dir], dir);
+  assert.equal(noEnv.status, 64);
+  assert.match(noEnv.stderr, /env-file/i);
+});
+
 test('CLI returns a failure exit code for a FAILED saga and a not-found code for unknown ids', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'pharos-saga-cli-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));

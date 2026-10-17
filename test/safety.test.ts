@@ -20,12 +20,18 @@ async function listFiles(dir: string): Promise<string[]> {
   return files;
 }
 
-test('executable source contains no wallet, signing, RPC or network sending code', async () => {
-  const files = [
+test('executable simulation source contains no wallet, signing, RPC or network sending code', async () => {
+  const allFiles = [
     ...(await listFiles(path.join(ROOT, 'src'))),
     ...(await listFiles(path.join(ROOT, 'scripts'))),
   ].filter((file) => file.endsWith('.ts'));
-  assert.ok(files.length >= 15);
+  const simulationFiles = allFiles.filter(
+    (file) =>
+      !file.includes(`${path.sep}testnet${path.sep}`) &&
+      !file.endsWith(`${path.sep}pharosTestnet.ts`) &&
+      !file.endsWith(`${path.sep}viemTestnetClient.ts`),
+  );
+  assert.ok(simulationFiles.length >= 20);
 
   const forbidden = [
     'PRIVATE_KEY',
@@ -37,31 +43,57 @@ test('executable source contains no wallet, signing, RPC or network sending code
     'JsonRpcProvider',
     'new Wallet',
     'wallet.json',
-    'https://',
-    'http://',
     'fetch(',
+    'viem',
   ];
-  for (const file of files) {
+  for (const file of simulationFiles) {
     const source = await fs.readFile(file, 'utf8');
+    const isSimulationCli = file.endsWith(`${path.sep}src${path.sep}cli.ts`);
     for (const needle of forbidden) {
+      // The CLI only passes the env VARIABLE NAME "PRIVATE_KEY"; it never reads a value.
+      if (needle === 'PRIVATE_KEY' && isSimulationCli) continue;
       assert.equal(
         source.includes(needle),
         false,
         `${path.relative(ROOT, file)} must not contain ${needle}`,
       );
     }
+    // The shared receipt verifier compares an explorer URL string; it performs no I/O.
+    if (!file.endsWith(`${path.sep}domain${path.sep}receipts.ts`)) {
+      assert.equal(source.includes('http://'), false, `${path.relative(ROOT, file)} must be offline`);
+      assert.equal(source.includes('https://'), false, `${path.relative(ROOT, file)} must be offline`);
+    }
   }
 });
 
-test('package manifest has no wallet, RPC or chain SDK runtime dependency', async () => {
+test('testnet adapter is isolated from mainnet and never targets rpc.pharos.xyz', async () => {
+  const testnetFiles = [
+    ...(await listFiles(path.join(ROOT, 'src', 'testnet'))),
+    path.join(ROOT, 'src', 'adapters', 'pharosTestnet.ts'),
+  ].filter((file) => file.endsWith('.ts'));
+  assert.ok(testnetFiles.length >= 5);
+  for (const file of testnetFiles) {
+    const source = await fs.readFile(file, 'utf8');
+    assert.equal(source.includes('rpc.pharos.xyz'), false, `${path.relative(ROOT, file)} must not target mainnet RPC`);
+    assert.equal(source.includes('1672'), false, `${path.relative(ROOT, file)} must not reference mainnet chain id`);
+  }
+  const config = await fs.readFile(path.join(ROOT, 'src', 'testnet', 'config.ts'), 'utf8');
+  assert.match(config, /688689/);
+  assert.match(config, /atlantic-testnet/);
+});
+
+test('package manifest permits only viem for testnet and no other chain SDK', async () => {
   const manifest = JSON.parse(await fs.readFile(path.join(ROOT, 'package.json'), 'utf8')) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
     scripts: Record<string, string>;
   };
-  assert.equal(manifest.dependencies, undefined);
-  const all = Object.keys(manifest.devDependencies ?? {});
-  for (const banned of ['ethers', 'viem', 'web3', 'wagmi', '@solana/web3.js', 'hardhat']) {
+  assert.deepEqual(Object.keys(manifest.dependencies ?? {}), ['viem']);
+  const all = [
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.devDependencies ?? {}),
+  ];
+  for (const banned of ['ethers', 'web3', 'wagmi', '@solana/web3.js', 'hardhat']) {
     assert.equal(all.includes(banned), false, `${banned} must not be installed`);
   }
   for (const script of ['test', 'demo:success', 'demo:failure', 'verify']) {
