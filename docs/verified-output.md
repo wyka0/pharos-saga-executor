@@ -3,13 +3,16 @@
 Verification date: **2026-10-17**
 Project: `C:\pharos-saga-executor`
 Platform: Windows 11, PowerShell 7, Node **v24.14.1**, npm **11.11.0**
-Adapter: **simulated only** (no wallet, no RPC, no network, no real funds)
+Adapter: **simulated** (iteration 1) plus a **gated Atlantic testnet adapter** (iteration 2, read-only)
 
 > ## Classification
 >
-> Everything in this file is a **deterministic simulation**. No transaction hash,
-> block number or explorer link exists. The demos are demonstrations of the state
-> machine, not live blockchain evidence. No real transaction was sent or confirmed.
+> **Sections 1–8 are iteration 1:** deterministic simulation. No transaction hash,
+> block number or explorer link exists there; no real transaction was sent.
+>
+> **Section 9 is iteration 2:** live **read-only** Atlantic testnet checks
+> (chain id, balances, token metadata, plan generation). No transaction was
+> signed or broadcast. The live plan is blocked and contains zero transactions.
 
 ## 1. Command summary
 
