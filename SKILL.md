@@ -6,16 +6,20 @@ description: >
   log. Use when a user asks for a multi-step dependent Pharos transaction
   workflow, a safe approve/swap/deposit sequence, saga recovery, retry policy,
   compensation after a permanent step failure, or an inspectable state machine.
-  SIMULATION ONLY in this release: it never uses a wallet and never sends a
-  transaction. Trigger phrases: pharos saga, approve swap deposit, dependent
+  SIMULATION by default. A separate, gated Pharos Atlantic testnet adapter is
+  included but refuses to sign without an exact approved plan hash; it never
+  touches mainnet. No live transaction has been executed.
+  Trigger phrases: pharos saga, approve swap deposit, dependent
   transaction workflow, saga executor, resume a failed swap, compensate a
-  failed deposit, manual recovery required.
-version: 0.1.0
+  failed deposit, manual recovery required, testnet approval plan.
+version: 0.2.0
 license: MIT
 metadata:
   author: wyka0
   simulated: true
-  network: none
+  testnet: atlantic-688689
+  mainnet: never
+  live_transaction_executed: false
   node: ">=20"
 ---
 
@@ -24,24 +28,36 @@ metadata:
 A deterministic, resumable skill for a three-step dependent workflow:
 
 ```text
-APPROVE -> verify simulated receipt -> SWAP -> verify simulated receipt -> DEPOSIT -> verify simulated receipt
+APPROVE -> verify receipt -> SWAP -> verify receipt -> DEPOSIT -> verify receipt
 ```
+
+The default adapter is simulated. A gated Atlantic testnet adapter is available
+but currently **blocked** by missing verified token/protocol prerequisites.
 
 ## Status and safety boundary (read this first)
 
-> **This release is simulation-only.** `adapterId` is fixed to `simulated`.
-> No wallet, private key, RPC endpoint, signature, broadcast or confirmation is
-> used. Every receipt is branded `simulated: true`, `network: "simulated"`, uses
-> a `sim_*` reference, and carries a disclaimer. No `0x` transaction hash or
-> explorer link is produced.
+> **Default path: SIMULATION ONLY.** No wallet, private key, RPC endpoint, signature,
+> broadcast or confirmation is used by the demos. Simulated receipts are branded
+> `simulated: true` and use `sim_*` references.
+>
+> **Testnet path: Atlantic only (chainId 688689).** It requires an explicit plan
+> hash approval plus a CLI confirmation gate. It rejects any other chain,
+> including mainnet 1672. **No live transaction has been sent.** The wallet has
+> zero test ERC-20s and no official Atlantic DEX/router or vault exists.
 
 The skill must **never**:
 
-- claim that a transaction was sent, mined, confirmed or seen on-chain;
-- ask for a private key, mnemonic, seed phrase, session token or `.env` secret;
+- touch mainnet funds or mainnet RPC endpoints;
+- claim that a transaction was sent, mined, confirmed or seen on-chain unless a
+  real receipt was verified;
+- ask for a private key, mnemonic, seed phrase, session token or `.env` secret in
+  chat; testnet signing keys are read only from a user-controlled local env file;
+- print, log or commit secret values;
+- approve an unlimited allowance or an arbitrary spender;
 - retry a submission whose outcome is unknown;
 - describe compensation as a rollback;
-- report a saga as `COMPLETED` when any step failed.
+- report a saga as `COMPLETED` when any step failed;
+- call a simulated or mocked result "live testnet evidence".
 
 The hosted `ai.pharos.xyz` environment has no documented custom-skill
 registration endpoint. This skill is installed into a local supported agent
@@ -56,38 +72,39 @@ registration endpoint. This skill is installed into a local supported agent
   compensated.
 - A reviewer wants a deterministic success and forced-failure demonstration.
 
-Do not use it for live trading, real funds, token price queries, or any request
-that requires a wallet. Use a verified testnet adapter only after one exists and
-has been reviewed.
+Do not use it for mainnet, live trading, real funds, token price queries, or any
+request that requires a mainnet wallet. The included testnet adapter is
+Atlantic-only and read-only until a plan is explicitly approved.
 
 ## Inputs
 
 | Input | Meaning | Default |
 | --- | --- | --- |
-| `fromToken` | token approved and swapped | `PROS` (simulated label) |
+| `fromToken` | token approved and swapped | `PROS` (simulated label) / `USDC` (testnet) |
 | `toToken` | token received from swap | `USDC` (simulated label) |
 | `depositToken` | token deposited; must match the swap output token | `USDC` |
-| `amountIn` | positive decimal amount in simulated units | `100` |
+| `amountIn` | positive decimal amount | `100` simulated / `0.01` testnet CLI |
 | `owner` | simulated account label | `sim:demo-account` |
-| `spender` | simulated approval spender | `sim:pharos-router` |
-| `protocol` / `depositTarget` | simulated vault labels | `sim:pharos-vault` |
+| `spender` | approval spender; testnet must be a configured verified protocol | `sim:pharos-router` |
+| `protocol` / `depositTarget` | vault labels | `sim:pharos-vault` |
 | `sagaId` | stable id; generated if omitted | generated |
 | `clientRequestId` | optional saga-creation idempotency key | none |
 | `retry.maxAttempts` | total attempts per step, 1–20 | `3` |
-| `retry.baseDelayMs` | exponential backoff base | `100` |
-| `retry.maxDelayMs` | backoff ceiling | `1000` |
-| `retry.backoffFactor` | exponent | `2` |
+| `retry.baseDelayMs` / `maxDelayMs` / `backoffFactor` | backoff | `100` / `1000` / `2` |
 | `compensationPolicy.onSwapFailure` | `REVOKE_APPROVAL` or `NONE` | `REVOKE_APPROVAL` |
 | `compensationPolicy.onDepositFailure` | `SIMULATED_UNWIND_SWAP` or `NONE` | `SIMULATED_UNWIND_SWAP` |
-| `scenario` | deterministic injected-fault preset | `success` |
+| `scenario` | deterministic simulated fault preset | `success` |
+| `adapterId` | `simulated` or `pharos-testnet` | `simulated` |
+| `testnet` | verified network/token/protocol config (no secrets) | none |
 
-All token and account names are **simulation labels**, not real addresses.
+All simulated token and account names are **labels**, not real addresses.
+Testnet config uses real public addresses and documentation provenance strings.
 
 ## Workflow contract
 
 1. `CREATED -> APPROVAL_PENDING` is persisted; then `APPROVE` runs.
-2. The `APPROVE` simulated receipt is verified independently. Only then does the
-   saga become `APPROVED` and then `SWAP_PENDING`.
+2. The `APPROVE` receipt is verified independently. Only then does the saga
+   become `APPROVED` and then `SWAP_PENDING`.
 3. `SWAP` runs with the same stable idempotency key on every attempt. Its
    receipt is verified before `SWAPPED -> DEPOSIT_PENDING`.
 4. `DEPOSIT` consumes the exact amount received from the verified swap. Its
@@ -102,6 +119,9 @@ All token and account names are **simulation labels**, not real addresses.
 8. An unknown submission outcome is reconciled once by idempotency key. If it
    cannot be proven, the saga goes to `MANUAL_RECOVERY_REQUIRED` with no retry
    and no compensation.
+9. On testnet, an `INTENT` journal entry is written before send; a missing hash is
+   an unknown outcome and is never resubmitted. An on-chain receipt must pass
+   chain, tx, confirmation and postcondition checks before the next step.
 
 ## Commands
 
@@ -137,6 +157,32 @@ npm run cli -- audit saga_my_run
 npm run cli -- run saga_my_run
 ```
 
+Gated testnet commands (Atlantic chainId 688689 only):
+
+```powershell
+# read-only: wallet/token/protocol readiness; no signing key read
+npm run testnet:readiness -- --env-file <local-env> `
+  --address <wallet-address> --token USDC --amount 0.01
+
+# read-only: produce an exact plan and hash; sends nothing
+npm run testnet:plan -- --env-file <local-env> `
+  --address <wallet-address> --id saga_testnet_plan --token USDC --amount 0.01
+
+# only after explicit review of the exact plan hash
+npm run testnet:run -- <saga-id> --env-file <local-env> `
+  --approval-hash <plan-hash> --confirm-atlantic-testnet
+```
+
+`--env-file` points to a user-controlled local file. Only variable **names** are
+documented (`RPC_URL`, `PRIVATE_KEY`); values are never printed or committed.
+`testnet:readiness` and `testnet:plan` do not read the signing key when
+`--address` is supplied. `testnet:run` has two independent gates: the exact plan
+hash and `--confirm-atlantic-testnet`.
+
+At present the plan is **not executable** (zero transactions) because there is no
+verified Atlantic router/vault and the wallet holds zero test ERC-20s. Do not
+fabricate a live run.
+
 Use `--state-dir <path>` to choose the persisted state directory (default
 `./state`, git-ignored). Use `--json` for one machine-readable record.
 
@@ -170,17 +216,30 @@ supportsCompensation(action): boolean
 compensate(context): Promise<CompensationResult>
 ```
 
-`src/adapters/simulated.ts` is the only implementation. A future testnet adapter
-must be idempotent by key, must throw `UnknownSubmissionOutcomeError` for
-post-submission ambiguity, must reconcile before resubmitting, and must verify
-its own receipts. The executor, states, persistence and audit format do not need
-to change. `src/adapters/factory.ts` refuses any adapter id it does not know.
+`src/adapters/simulated.ts` and `src/adapters/pharosTestnet.ts` both implement
+this interface. The testnet adapter:
+
+- verifies `eth_chainId === 688689` before planning, sending or compensating;
+- refuses mainnet and any unverified chain;
+- requires an explicit `PlanApproval` hash that matches the current plan;
+- writes an INTENT journal entry before broadcast;
+- never resubmits an INTENT/BROADCAST/UNKNOWN key;
+- preserves tx hashes and reconciles by idempotency key;
+- returns a distinct `OnChainReceipt` type, never a simulated one;
+- only supports `REVOKE_APPROVAL` compensation, and only with its own approved
+  plan.
+
+The executor, states, persistence format and audit format are unchanged.
+`src/adapters/factory.ts` refuses any adapter id it does not know and requires
+testnet client/journal dependencies for `pharos-testnet`.
 
 ## Outputs
 
 - `state/sagas/<sagaId>.json` — authoritative snapshot
 - `state/sagas/<sagaId>.audit.ndjson` — audit mirror
 - `state/simulated-ledger.json` — idempotency ledger for simulated receipts
+- `state/testnet-journal.json` — INTENT/BROADCAST/CONFIRMED/REVERTED/UNKNOWN
+  journal for testnet transactions (public metadata only)
 - CLI text or `--json` record containing state, steps, receipts, failure,
   compensation and the full audit log
 
@@ -192,7 +251,10 @@ Generated state is git-ignored and must not be committed.
   transient retry, retry exhaustion, permanent failure in each step,
   compensation success/failure, unavailable compensation, manual recovery,
   duplicate/idempotent execution, persistence/resume, illegal transitions,
-  audit ordering, unknown outcomes and safety.
+  audit ordering, unknown outcomes, testnet readiness/plan gating, reverted and
+  unknown sends, postconditions, read retries, mainnet rejection and safety.
 - `npm run verify` also builds and runs `scripts/check-safety.mjs`.
-- See [`docs/verified-output.md`](docs/verified-output.md) for exact commands
-  and recorded results.
+- See [`docs/verified-output.md`](docs/verified-output.md),
+  [`docs/testnet-readiness.md`](docs/testnet-readiness.md) and
+  [`docs/testnet-results.md`](docs/testnet-results.md) for exact commands and
+  recorded results.

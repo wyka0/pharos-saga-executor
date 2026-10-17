@@ -249,50 +249,82 @@ error kind/code/message/attempt, reconciliation results, and compensation
 outcomes. `docs/verified-output.md` records the checks that assert ordering and
 completeness.
 
-## 9. Adapter seam for a future testnet adapter
+## 9. Adapter seam and the Atlantic testnet adapter
 
 `ChainAdapter` (`src/adapters/types.ts`) is the only interface the executor sees:
 
 ```ts
-submit(step, context): Promise<Receipt>
+submit(step, context): Promise<ProofReceipt>
 reconcile(step, context): Promise<{ receipt, detail }>
 supportsCompensation(action): boolean
 compensate(context): Promise<CompensationResult>
 ```
 
-A future adapter must:
+`ProofReceipt` is a discriminated union: `SimulatedReceipt` (`simulated: true`)
+and `OnChainReceipt` (`simulated: false`, `network: "atlantic-testnet"`). The
+verifier dispatches on the type and rejects a receipt that mixes their fields.
 
-1. be idempotent by `stepRecord.idempotencyKey`;
-2. throw `UnknownSubmissionOutcomeError` for any post-submission ambiguity, not
-   a transient error;
-3. implement `reconcile` before any resubmission;
-4. verify its own on-chain receipt (success status, correct sender/recipient,
-   token, amount, allowance, confirmation policy) before returning it;
-5. declare which compensation actions are actually safe;
-6. never describe a compensation as a rollback.
+### Simulation adapter
 
-`src/adapters/factory.ts` currently constructs only the simulated adapter and
-throws a configuration error for any other adapter id. That is intentional: no
-unverified testnet adapter is shipped or implied.
+`src/adapters/simulated.ts` remains the default. It has no network, wallet or
+signing code and is covered by the original 61 tests.
+
+### Testnet adapter
+
+`src/adapters/pharosTestnet.ts` implements the same interface with these
+additional guarantees:
+
+1. **Network guard** — every plan/submit/compensate reads `eth_chainId` and
+   refuses anything except **688689**. Mainnet RPC/chain id is absent from the
+   testnet module.
+2. **Approval gate** — `submit` requires a `PlanApproval` whose `planHash` equals
+   the recomputed canonical plan hash (which excludes wall-clock `createdAt`).
+   The CLI additionally requires `--confirm-atlantic-testnet`.
+3. **Capability gate** — planning is blocked if the token is not in the verified
+   registry, the spender is not a configured verified protocol, the balance is
+   insufficient, an allowance already exists, or no verified protocol exists.
+4. **Journal** — an `INTENT` entry is written before send, then `BROADCAST`,
+   `CONFIRMED`, `REVERTED` or `UNKNOWN`. An `INTENT` with no hash is never
+   resubmitted.
+5. **Single-shot send** — 4 read-only attempts exist for reads/planning, but no
+   send is ever retried. A timeout or ambiguous send is `UNKNOWN`.
+6. **Receipt verification** — chain id, tx hash, block, success status,
+   confirmations, explorer URL, gas fields, and an allowance postcondition are
+   checked before the saga advances.
+7. **Compensation** — only `REVOKE_APPROVAL` is implemented, and it requires its
+   own approved plan. `SIMULATED_UNWIND_SWAP` is unavailable on testnet because
+   no verified DEX exists.
+8. **Preflight** — token metadata, balance, current allowance, gas estimate and
+   max fee are read before the intent is written.
+
+At the time of writing, all live capabilities are blocked: the wallet has zero
+test ERC-20s and no official Atlantic router/vault exists. The adapter reports
+that rather than targeting a random contract.
 
 ## 10. CLI and API
 
 - Library entry: `src/index.ts`.
-- CLI: `src/cli.ts` (`start`, `run`, `inspect`, `list`, `audit`).
+- CLI: `src/cli.ts` (`start`, `run`, `inspect`, `list`, `audit`,
+  `testnet:readiness`, `testnet:plan`, `testnet:run`).
 - State directory: `--state-dir`, or `PHAROS_SAGA_STATE_DIR`, default `./state`
   (git-ignored).
 - Demos use fixed ids, a fixed virtual clock, deterministic jitter and fresh
   `.demo-state/<name>` directories.
+- Testnet commands require `--env-file`; only variable names are documented.
+  Readiness/planning accept `--address` and do not read the signing key.
+- `testnet:run` requires both the exact plan hash and
+  `--confirm-atlantic-testnet`; it has never been invoked in this work.
 
 ## 11. Known limitations
 
-- Simulated adapter only; there is no live/testnet evidence in this iteration.
-- The simulated ledger is serialised within one process; concurrent writers from
-  multiple processes are not supported.
+- No live testnet transaction was executed. APPROVE/SWAP/DEPOSIT are blocked by
+  zero test token balance and the absence of verified Atlantic protocols.
+- The simulated ledger and the testnet journal are single-process; concurrent
+  multi-process writers are not supported.
 - Compensation is attempted once and is not automatically retried.
-- A crash after `IN_FLIGHT` but before submission is conservatively treated as
-  unknown and escalates to manual recovery, even though the simulation could
-  know nothing happened.
+- A crash after `IN_FLIGHT` (simulation) or `INTENT` (testnet) is conservatively
+  treated as unknown and escalates to manual recovery.
+- The testnet journal is not automatically pruned.
 - Hosted `ai.pharos.xyz` custom-skill registration is undocumented, so the skill
   is distributed as an installable repository rather than registered in the
   hosted chat.

@@ -5,21 +5,28 @@ as an installable agent skill for the Pharos Agent Arena task
 [**Saga Executor**](https://pharos-agent-arena.vercel.app/tasks/saga-executor)
 (Hard / SkillEngine / 200 points).
 
-> ## Simulation notice
+> ## Simulation and testnet notice
 >
-> **This first iteration uses a simulated adapter only.** No wallet was used, no
-> private key exists in this repository, no RPC endpoint is contacted, and **no
-> on-chain transaction was sent or confirmed**. Every receipt is branded
-> `simulated: true`, `network: "simulated"` and uses a `sim_*` reference. There is
-> no transaction hash or explorer link to verify, and none is claimed.
+> **The default adapter is still simulation-only.** No wallet is used by the demo
+> path, no private key exists in this repository, and **no on-chain transaction was
+> sent or confirmed** by the simulations. Every simulated receipt is branded
+> `simulated: true`, uses a `sim_*` reference, and has no transaction hash or
+> explorer link.
 >
-> The simulated compensation is also clearly labelled: it is a new simulated
-> call, **not a blockchain rollback**.
+> A separate, gated **Pharos Atlantic testnet adapter** has been added. It is
+> read-only until a user approves an exact plan hash. At this time it is
+> **blocked**: the wallet has zero test ERC-20s and there is no official
+> DEX/router or vault on Atlantic. **No live transaction has been sent.** See
+> [`docs/testnet-results.md`](docs/testnet-results.md).
+>
+> Simulated compensation is clearly labelled as a new simulated call, **not a
+> blockchain rollback**.
 
 - Node.js 20+ (verified on Node 24.14.1)
-- Zero runtime dependencies, zero network calls
+- Simulation path has no wallet, RPC or network calls; `viem` is used only by the
+  gated testnet adapter
 - State machine, retry policy, compensation, persistence, CLI and tests
-- 61 automated tests, all offline
+- **80 automated tests**, all offline
 
 ---
 
@@ -35,6 +42,7 @@ as an installable agent skill for the Pharos Agent Arena task
 - [Retry and recovery rules](#retry-and-recovery-rules)
 - [CLI](#cli)
 - [Persistence](#persistence)
+- [Testnet readiness (read-only)](#testnet-readiness-read-only)
 - [Skill packaging and environment](#skill-packaging-and-environment)
 - [Tests and verification](#tests-and-verification)
 - [Safety](#safety)
@@ -372,6 +380,56 @@ directory is `./state`; demos use `.demo-state/`. Both are git-ignored. A saga c
 be inspected while stopped (`--no-run`), resumed with `run`, and safely re-run:
 terminal sagas are no-ops, and concurrent duplicate runs submit each step once.
 
+## Testnet readiness (read-only)
+
+A separate `PharosTestnetAdapter` exists behind the same `ChainAdapter` interface.
+It is **not approved and has not sent any transaction**. The verified facts:
+
+| Item | Value |
+| --- | --- |
+| Network | Atlantic testnet, chainId **688689** |
+| RPC | official `https://atlantic.dplabs-internal.com` (configured host matches) |
+| Explorer | `https://atlantic.pharosscan.xyz/` |
+| Wallet | `0xE2B8651178ade144003537eA509E37877dba40bb` |
+| Native balance | 0.542613955838483504 PHRS |
+| Test ERC-20 balances | **0** for all five documented tokens |
+| Verified tokens | USDC, USDT, WBTC, WETH, WPHRS (code + symbol + decimals checked) |
+| Swap/router | **none documented/deployed on Atlantic** |
+| Deposit/vault | **none documented/deployed on Atlantic** |
+| Faucet | native PHRS mentioned without URL; no test-ERC-20 faucet documented |
+
+Capabilities reported by the adapter:
+
+```text
+APPROVE available=false  (no verified spender; 0 USDC)
+SWAP    available=false  (no verified router)
+DEPOSIT available=false  (no verified vault)
+```
+
+Read-only commands (no signing key read by readiness/planning):
+
+```powershell
+npm run testnet:readiness -- --env-file <local-env> `
+  --address 0xE2B8651178ade144003537eA509E37877dba40bb `
+  --state-dir .demo-state/readiness --token USDC --amount 0.01
+
+npm run testnet:plan -- --env-file <local-env> `
+  --address 0xE2B8651178ade144003537eA509E37877dba40bb `
+  --state-dir .demo-state/readiness --id saga_testnet_usdc_approve_plan `
+  --token USDC --amount 0.01
+```
+
+The resulting plan is `executable=false` with **zero transactions** and the
+blocked reason "No verified swap or deposit contract is configured". No
+transaction hash exists.
+
+`testnet:run` has two independent gates: the exact `--approval-hash` printed by
+the plan **and** `--confirm-atlantic-testnet`. It also re-checks the live chain ID
+and the plan hash before the adapter can sign. It has not been run.
+
+Full findings: [`docs/testnet-readiness.md`](docs/testnet-readiness.md).
+Execution/approval status: [`docs/testnet-results.md`](docs/testnet-results.md).
+
 ## Skill packaging and environment
 
 The Pharos environment exposes four hosted agent types and a Skill Engine page
@@ -419,32 +477,45 @@ npm run verify
 - illegal state transitions;
 - audit ordering and completeness;
 - unknown submission outcome handling;
+- testnet adapter readiness, plan gating, on-chain receipt verification, journal
+  outcomes, reverted/timeout/ambiguous sends, postcondition failure, read retries,
+  mainnet rejection, and partial-stop behaviour;
 - static safety checks.
 
-The suite uses `VirtualClock`, fixed jitter and temporary state directories, so
-it needs no wallet, live network, real funds or real-time retry waits. Exact test
-counts and command output are recorded in
+The suite uses `VirtualClock`, fixed jitter, a fake testnet client and temporary
+state directories, so it needs no wallet, live network, real funds or real-time
+retry waits. Exact test counts and command output are recorded in
 [`docs/verified-output.md`](docs/verified-output.md).
 
 ## Safety
 
-- No wallet, private key, mnemonic, seed phrase, session token or `.env` is used.
-- No RPC endpoint, HTTP request, signing library or chain SDK is imported by
-  `src/` or `scripts/`.
+- The simulation path uses no wallet, private key, mnemonic, seed phrase, session
+  token, `.env`, RPC endpoint or signing library.
+- The testnet adapter is Atlantic-only (chainId 688689), never targets mainnet,
+  and cannot sign without an explicit plan-hash approval plus the CLI confirmation
+  gate. No testnet transaction has been sent.
 - Simulated receipts cannot pass verification if they contain `simulated:false`,
   a `0x` transaction reference, `txHash`, `transactionHash`, `blockNumber`,
   `blockHash` or an explorer URL.
-- The CLI and demos always print the simulation disclaimer; they never call a
-  simulated result "confirmed on-chain".
+- On-chain receipts are a separate type and require a real testnet tx hash,
+  success status, confirmations, explorer URL and postconditions.
+- The simulation CLI and demos print the simulation disclaimer; the testnet CLI
+  prints the Atlantic-testnet disclaimer and never calls a simulated result
+  on-chain.
 - Generated state and dependencies are excluded by `.gitignore` and checked by
   `scripts/check-safety.mjs`.
 
 ## Limitations
 
-- Simulated adapter only. No testnet/mainnet evidence is produced or implied.
-- The simulated ledger is serialised within one process; concurrent writers from
-  multiple processes are not supported.
-- Compensation is attempted once and is not automatically retried.
+- Live testnet execution is currently **blocked**: zero test ERC-20 balance and no
+  officially verified Atlantic swap/router or vault.
+- No mainnet adapter exists. Mainnet is explicitly rejected.
+- The simulated ledger is serialised within one process; the testnet journal is
+  also single-process.
+- Compensation is attempted once and is not automatically retried; testnet
+  unwind compensation is unavailable without a verified DEX.
+- A crash after an `INTENT` journal write without a hash is treated as unknown and
+  requires manual recovery.
 - A crash after persisting `IN_FLIGHT` but before submission is conservatively
   escalated to manual recovery, even though the simulator could theoretically
   know that nothing was submitted.

@@ -534,3 +534,157 @@ receipt references are reproducible.
 
 Generated `.demo-state/`, `state/`, `dist/` and `node_modules/` must not be
 committed.
+
+---
+
+# Iteration 2 — Atlantic testnet adapter (read-only phase)
+
+Date: **2026-10-17**
+Status: **no live transaction sent**. The testnet plan is blocked and contains
+zero transactions. See [testnet-readiness.md](testnet-readiness.md) and
+[testnet-results.md](testnet-results.md).
+
+## 9.1 Baseline preservation
+
+Before the extension:
+
+```text
+npm run verify -> build + 61/61 tests + safety gate, exit 0
+git status     -> clean
+HEAD           -> 15d867925dd192f7802c5fd730f6deb239b46bf8
+```
+
+All 61 original simulation tests still pass after the testnet changes.
+
+## 9.2 Final verification
+
+```text
+npm run verify
+```
+
+Recorded result:
+
+```text
+ℹ tests 80
+ℹ pass 80
+ℹ fail 0
+ℹ duration_ms 42889.7821
+PASS  25 simulation files are free of wallet/RPC/network code
+PASS  10 testnet files are isolated from mainnet and contain no key literals
+PASS  only viem is declared as a runtime dependency
+PASS  no generated state, secrets or dependencies are tracked
+SAFETY GATE PASSED - simulation stays offline; testnet path is gated and mainnet-free.
+```
+
+Test distribution: 10 state machine + 4 success + 7 retry + 13 failure +
+9 persistence + 7 audit + 4 CLI + 9 safety + 17 testnet = **80**.
+
+## 9.3 Read-only readiness result
+
+Command (no signing key read; `--address` used):
+
+```powershell
+npm run testnet:readiness -- `
+  --env-file <local-env-file> `
+  --address 0xE2B8651178ade144003537eA509E37877dba40bb `
+  --state-dir .demo-state/readiness --token USDC --amount 0.01
+```
+
+Actual result:
+
+```text
+PHAROS ATLANTIC TESTNET READINESS (READ-ONLY)
+Network:     atlantic-testnet (chainId 688689, expected 688689)
+RPC host:    https://atlantic.dplabs-internal.com/<redacted-path>
+Block:       31540254
+Wallet:      0xE2B8651178ade144003537eA509E37877dba40bb
+Native:      0.542613955838483504 PHRS
+Explorer:    https://atlantic.pharosscan.xyz/
+Faucet:      documented=false url=none
+             Official docs mention a Pharos faucet for native PHRS but publish no URL.
+             No documented faucet exists for testnet USDC/USDT/WETH/WPHRS.
+
+Tokens:
+  USDC 0xcfC8330f4BCAB529c625D12781b1C19466A9Fc8B code=true verified=true decimals=6 balance=0
+  USDT 0xE7E84B8B4f39C507499c40B4ac199B050e2882d5 code=true verified=true decimals=6 balance=0
+  WBTC 0x0c64F03EEa5c30946D5c55B4b532D08ad74638a4 code=true verified=true decimals=18 balance=0
+  WETH 0x7d211F77525ea39A0592794f793cC1036eEaccD5 code=true verified=true decimals=18 balance=0
+  WPHRS 0x838800b758277CC111B2d48Ab01e5E164f8E9471 code=true verified=true decimals=18 balance=0
+
+Capabilities:
+  APPROVE available=false
+    - No verified swap or deposit contract is configured, so there is no justified approval spender
+    - Wallet holds 0 USDC, less than the requested 0.01
+  SWAP    available=false
+    - No verified swap/router contract is configured. Official Pharos docs list only token,
+      deployment and Permit2 canonical contracts on Atlantic testnet.
+  DEPOSIT available=false
+    - No verified deposit/vault contract is configured. Official Pharos docs list no deployed
+      lending or vault protocol on Atlantic testnet.
+
+No transaction was signed or broadcast.
+```
+
+## 9.4 Transaction plan result
+
+Command (read-only):
+
+```powershell
+npm run testnet:plan -- `
+  --env-file <local-env-file> `
+  --address 0xE2B8651178ade144003537eA509E37877dba40bb `
+  --state-dir .demo-state/readiness `
+  --id saga_testnet_usdc_approve_plan `
+  --token USDC --amount 0.01
+```
+
+Actual result:
+
+```text
+TRANSACTION PLAN - PHAROS ATLANTIC TESTNET ONLY
+NOTHING HAS BEEN SIGNED OR BROADCAST. Approval is required.
+Plan hash:   6d2be1d2f0146b6fd6f29f593976fb24037548bc55eec6743691893927dd7507
+Network:     atlantic-testnet (chainId 688689)
+RPC host:    https://atlantic.dplabs-internal.com/<redacted-path>
+Wallet:      0xE2B8651178ade144003537eA509E37877dba40bb
+Nonce:       13
+Step:        APPROVE
+Executable:  false
+Max cost:    0 wei (0 PHRS)
+
+Transactions (0):
+
+Blocked reasons:
+  - No verified swap or deposit contract is configured, so there is no justified
+    approval spender. Refusing to approve an arbitrary address.
+```
+
+Because the plan is not executable, there is no transaction to approve. The
+`testnet:run` command was **not** invoked. No key was read by readiness/planning.
+
+## 9.5 Gas and transaction evidence
+
+| Metric | Result |
+| --- | --- |
+| Transactions signed | **0** |
+| Transactions broadcast | **0** |
+| Transaction hashes | **none** |
+| Gas spent | **0** |
+| Explorer links | **none** |
+
+A separate read-only `eth_estimateGas` for a hypothetical 0.01 USDC
+`approve(Permit2, amount)` returned 71,377 gas at 10 gwei (0.00071377 PHRS at
+gas price; 0.00142754 PHRS at the adapter's 2x ceiling). This was **not** a
+proposed or executed transaction and Permit2 is not used as a protocol spender.
+
+## 9.6 Classification
+
+| Artifact | Classification |
+| --- | --- |
+| `testnet:readiness` output | **LIVE READ-ONLY** chain data; no transaction |
+| `testnet:plan` output | **LIVE READ-ONLY** plan; executable=false, zero transactions |
+| `test/testnet.test.ts` | **MOCKED** chain client, offline |
+| `npm run demo:*` | **SIMULATED** adapter, offline |
+| Any transaction hash | **none** |
+
+No mocked or simulated result is presented as live testnet evidence.
