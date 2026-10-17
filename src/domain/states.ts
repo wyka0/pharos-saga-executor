@@ -84,8 +84,7 @@ export function assertPrerequisites(record: SagaRecord, step: StepName): void {
   if (
     prior.status !== 'SUCCEEDED' ||
     prior.submissionState !== 'VERIFIED' ||
-    prior.receipt === null ||
-    prior.receipt.simulated !== true
+    prior.receipt === null
   ) {
     throw new DependencyViolationError(
       `${step} cannot start: prerequisite ${prerequisite} is not verified ` +

@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
+import { PharosTestnetAdapter } from './adapters/pharosTestnet.js';
+import { SystemClock } from './domain/clock.js';
 import { ConfigurationError, SagaBusyError, SagaNotFoundError } from './domain/errors.js';
+import { createSagaRecord } from './domain/saga.js';
 import { scenarioByName, SCENARIO_NAMES } from './domain/scenarios.js';
 import type {
   CompensationPolicy,
   SagaRecord,
   StartSagaInput,
+  StepName,
 } from './domain/types.js';
 import { DEFAULT_REQUEST } from './domain/types.js';
 import { SagaExecutor } from './executor/executor.js';
 import { SagaStore } from './persistence/store.js';
 import { formatAuditLog, formatSaga, formatSagaList } from './render.js';
+import { createTestnetRuntime } from './testnet/cliSupport.js';
+import type { TransactionPlan } from './testnet/plan.js';
+import { formatUnits } from './testnet/units.js';
 
 class UsageError extends Error {
   readonly code = 'USAGE';
@@ -41,9 +48,17 @@ const VALUE_OPTIONS = new Set([
   'backoff-factor',
   'compensation-swap',
   'compensation-deposit',
+  'env-file',
+  'rpc-var',
+  'key-var',
+  'address',
+  'token',
+  'spender',
+  'approval-hash',
+  'config',
 ]);
 
-const BOOLEAN_FLAGS = new Set(['json', 'no-run', 'help']);
+const BOOLEAN_FLAGS = new Set(['json', 'no-run', 'help', 'confirm-atlantic-testnet']);
 
 function parseArgs(args: string[]): ParsedArgs {
   const positional: string[] = [];
@@ -156,6 +171,21 @@ function printHelp(): void {
       '  pharos-saga inspect <sagaId> [options]',
       '  pharos-saga list [options]',
       '  pharos-saga audit <sagaId> [options]',
+      '  pharos-saga testnet:readiness --env-file <path> [options]',
+      '  pharos-saga testnet:plan --env-file <path> [options]',
+      '  pharos-saga testnet:run <sagaId> --env-file <path> --approval-hash <hash> --confirm-atlantic-testnet',
+      '',
+      'Testnet options (Atlantic chainId 688689 only; no mainnet path):',
+      '  --env-file <path>            env file with RPC and key variable names (values never printed)',
+      '  --rpc-var <NAME>             default RPC_URL',
+      '  --key-var <NAME>             default PRIVATE_KEY',
+      '  --address <0x...>            read-only address; avoids needing a key for readiness/plan',
+      '  --config <path>              optional verified protocol config JSON (no approval field)',
+      '  --token <symbol>             default USDC',
+      '  --amount <decimal>           default 0.01',
+      '  --spender <address>          must be a configured verified protocol for execution',
+      '  --approval-hash <hash>       exact plan hash from testnet:plan',
+      '  --confirm-atlantic-testnet   second explicit gate for testnet:run',
       '',
       'Start options:',
       '  --scenario <name>            success | failure | approval-failure | manual-recovery |',
@@ -270,6 +300,242 @@ async function commandAudit(parsed: ParsedArgs): Promise<number> {
   return 0;
 }
 
+function testnetOptions(parsed: ParsedArgs): {
+  envFile: string;
+  rpcVar: string;
+  keyVar: string;
+  address?: string;
+  configFile?: string;
+  stateDir: string;
+} {
+  const envFile = parsed.options.get('env-file') ?? process.env.PHAROS_TESTNET_ENV_FILE;
+  if (!envFile) {
+    throw new UsageError(
+      'A testnet command requires --env-file <path> (or PHAROS_TESTNET_ENV_FILE). ' +
+        'The file must define the RPC and key variable names; values are never printed.',
+    );
+  }
+  return {
+    envFile,
+    rpcVar: parsed.options.get('rpc-var') ?? 'RPC_URL',
+    keyVar: parsed.options.get('key-var') ?? 'PRIVATE_KEY',
+    address: parsed.options.get('address'),
+    configFile: parsed.options.get('config'),
+    stateDir: stateDir(parsed),
+  };
+}
+
+function testnetParams(parsed: ParsedArgs, config: { swap: { address: string } | null; deposit: { address: string } | null }) {
+  return {
+    token: parsed.options.get('token') ?? 'USDC',
+    amount: parsed.options.get('amount') ?? '0.01',
+    spender:
+      parsed.options.get('spender') ??
+      config.swap?.address ??
+      config.deposit?.address ??
+      '0x0000000000000000000000000000000000000000',
+  };
+}
+
+function printPlan(plan: TransactionPlan, rpcHost: string): void {
+  const lines = [
+    'TRANSACTION PLAN - PHAROS ATLANTIC TESTNET ONLY',
+    'NOTHING HAS BEEN SIGNED OR BROADCAST. Approval is required.',
+    `Plan hash:   ${plan.planHash}`,
+    `Network:     ${plan.network} (chainId ${plan.chainId})`,
+    `RPC host:    ${rpcHost}`,
+    `Wallet:      ${plan.wallet}`,
+    `Nonce:       ${plan.nonce}`,
+    `Step:        ${plan.step}`,
+    `Executable:  ${plan.executable}`,
+    `Max cost:    ${plan.maxTestnetCostWei} wei (${formatUnits(BigInt(plan.maxTestnetCostWei), 18)} PHRS)`,
+    '',
+    `Transactions (${plan.transactions.length}):`,
+  ];
+  for (const tx of plan.transactions) {
+    lines.push(
+      `  [${tx.kind}] to=${tx.to}`,
+      `    data=${tx.data}`,
+      `    value=${tx.value} gas=${tx.gasEstimate} maxFeePerGas=${tx.maxFeePerGasWei}`,
+      `    token=${tx.tokenSymbol ?? '-'} amount=${tx.amount ?? '-'} decimals=${tx.decimals ?? '-'}`,
+      `    spender=${tx.spender ?? '-'}`,
+      `    maxCost=${tx.maxCostWei} wei`,
+      `    ${tx.description}`,
+    );
+  }
+  lines.push('', 'Expected postconditions:');
+  for (const condition of plan.expectedPostconditions) lines.push(`  - ${condition}`);
+  if (plan.blockedReasons.length > 0) {
+    lines.push('', 'Blocked reasons:');
+    for (const reason of plan.blockedReasons) lines.push(`  - ${reason}`);
+  }
+  lines.push(
+    '',
+    'To execute exactly this plan, an operator must explicitly re-run with:',
+    `  --approval-hash ${plan.planHash} --confirm-atlantic-testnet`,
+    'No transaction is sent by this planning command.',
+  );
+  process.stdout.write(`${lines.join('\n')}\n`);
+}
+
+async function commandTestnetReadiness(parsed: ParsedArgs): Promise<number> {
+  const runtime = await createTestnetRuntime(testnetOptions(parsed));
+  const params = testnetParams(parsed, runtime.config);
+  const adapter = new PharosTestnetAdapter({
+    client: runtime.client,
+    config: runtime.config,
+    journal: runtime.journal,
+  });
+  const report = await adapter.readiness({
+    fromToken: params.token,
+    amountIn: params.amount,
+    spender: params.spender,
+  });
+  if (parsed.flags.has('json')) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  } else {
+    const lines = [
+      'PHAROS ATLANTIC TESTNET READINESS (READ-ONLY)',
+      `Network:     ${report.network.name} (chainId ${report.network.chainId}, expected ${report.network.expectedChainId})`,
+      `RPC host:    ${runtime.rpcHost}`,
+      `Block:       ${report.network.blockNumber}`,
+      `Wallet:      ${report.wallet}`,
+      `Native:      ${report.nativeBalance} ${report.network.nativeSymbol}`,
+      `Explorer:    ${report.network.explorerUrl}`,
+      `Faucet:      documented=${report.faucet.documented} url=${report.faucet.url ?? 'none'}`,
+      `             ${report.faucet.note}`,
+      '',
+      'Tokens:',
+      ...report.tokens.map(
+        (token) =>
+          `  ${token.symbol} ${token.address} code=${token.codePresent} ` +
+          `verified=${token.verified} decimals=${token.onChainDecimals ?? token.decimals} ` +
+          `balance=${token.balance}${token.error ? ` error=${token.error}` : ''}`,
+      ),
+      '',
+      'Capabilities:',
+      `  APPROVE available=${report.capabilities.approve.available}`,
+      ...report.capabilities.approve.reasons.map((reason) => `    - ${reason}`),
+      `  SWAP    available=${report.capabilities.swap.available}`,
+      ...report.capabilities.swap.reasons.map((reason) => `    - ${reason}`),
+      `  DEPOSIT available=${report.capabilities.deposit.available}`,
+      ...report.capabilities.deposit.reasons.map((reason) => `    - ${reason}`),
+    ];
+    if (report.warnings.length > 0) {
+      lines.push('', 'Warnings:');
+      for (const warning of report.warnings) lines.push(`  - ${warning}`);
+    }
+    lines.push('', 'No transaction was signed or broadcast.');
+    process.stdout.write(`${lines.join('\n')}\n`);
+  }
+  return report.ok ? 0 : 2;
+}
+
+async function commandTestnetPlan(parsed: ParsedArgs): Promise<number> {
+  const runtime = await createTestnetRuntime(testnetOptions(parsed));
+  const params = testnetParams(parsed, runtime.config);
+  const sagaId = parsed.options.get('id') ?? 'saga_testnet_plan';
+  const existing = await runtime.store.loadMaybe(sagaId);
+  let saga: SagaRecord;
+  if (existing) {
+    saga = existing;
+    if (saga.config.adapterId !== 'pharos-testnet' || !saga.config.testnet) {
+      throw new UsageError(`Saga ${sagaId} is not a testnet saga`);
+    }
+  } else {
+    saga = createSagaRecord(
+      {
+        sagaId,
+        request: {
+          ...DEFAULT_REQUEST,
+          owner: 'testnet-wallet',
+          fromToken: params.token,
+          toToken: params.token,
+          depositToken: params.token,
+          amountIn: params.amount,
+          spender: params.spender,
+          protocol: 'atlantic-testnet-unverified',
+          depositTarget: 'atlantic-testnet-unverified',
+        },
+        adapterId: 'pharos-testnet',
+        testnet: runtime.config,
+        retry: { maxAttempts: 1, baseDelayMs: 100, maxDelayMs: 1_000, backoffFactor: 2 },
+      },
+      new SystemClock(),
+    );
+    await runtime.store.save(saga);
+  }
+  const config = saga.config.testnet;
+  if (!config) throw new UsageError('Saga has no testnet config');
+  const adapter = new PharosTestnetAdapter({
+    client: runtime.client,
+    config,
+    journal: runtime.journal,
+  });
+  const plan = await adapter.plan(saga, 'APPROVE');
+  if (parsed.flags.has('json')) {
+    process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+  } else {
+    printPlan(plan, runtime.rpcHost);
+  }
+  return plan.executable ? 0 : 2;
+}
+
+async function commandTestnetRun(parsed: ParsedArgs): Promise<number> {
+  if (!parsed.flags.has('confirm-atlantic-testnet')) {
+    throw new UsageError(
+      'Refusing to run: pass --confirm-atlantic-testnet and the exact --approval-hash after reviewing the plan',
+    );
+  }
+  const sagaId = requirePositional(parsed, 1, 'saga id');
+  const approvedHash = parsed.options.get('approval-hash');
+  if (!approvedHash || !/^[a-f0-9]{64}$/.test(approvedHash)) {
+    throw new UsageError('--approval-hash must be the 32-byte plan hash printed by testnet:plan');
+  }
+  const runtime = await createTestnetRuntime({ ...testnetOptions(parsed), requireSigning: true });
+  const saga = await runtime.store.load(sagaId);
+  if (saga.config.adapterId !== 'pharos-testnet' || !saga.config.testnet) {
+    throw new UsageError(`Saga ${sagaId} is not a testnet saga`);
+  }
+  const adapter = new PharosTestnetAdapter({
+    client: runtime.client,
+    config: saga.config.testnet,
+    journal: runtime.journal,
+  });
+  const step: StepName =
+    saga.state === 'CREATED' || saga.state === 'APPROVAL_PENDING'
+      ? 'APPROVE'
+      : saga.state === 'APPROVED' || saga.state === 'SWAP_PENDING'
+        ? 'SWAP'
+        : 'DEPOSIT';
+  const plan = await adapter.plan(saga, step);
+  if (!plan.executable) {
+    process.stderr.write(
+      `blocked: ${plan.blockedReasons.join(' | ')}\nNo transaction was signed or broadcast.\n`,
+    );
+    return 2;
+  }
+  if (plan.planHash !== approvedHash) {
+    process.stderr.write(
+      `plan mismatch: current=${plan.planHash} approved=${approvedHash}\n` +
+        'Re-plan and obtain a new explicit approval. Nothing was signed or broadcast.\n',
+    );
+    return 2;
+  }
+  const executor = new SagaExecutor({
+    store: runtime.store,
+    approval: {
+      planHash: approvedHash,
+      approvedAt: new Date().toISOString(),
+      approvedBy: 'explicit-cli-approval',
+    },
+    adapterFactory: () => adapter,
+  });
+  const record = await executor.runSaga(sagaId);
+  output(parsed, record);
+  return statusExitCode(record);
+}
+
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   if (argv.length === 0 || argv.includes('--help') || argv[0] === 'help') {
     printHelp();
@@ -288,6 +554,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       return commandList(parsed);
     case 'audit':
       return commandAudit(parsed);
+    case 'testnet:readiness':
+      return commandTestnetReadiness(parsed);
+    case 'testnet:plan':
+      return commandTestnetPlan(parsed);
+    case 'testnet:run':
+      return commandTestnetRun(parsed);
     default:
       throw new UsageError(`Unknown command "${command}". Use --help for usage.`);
   }

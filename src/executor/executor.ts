@@ -1,4 +1,4 @@
-import { createAdapter } from '../adapters/factory.js';
+import { createAdapter, type TestnetAdapterDeps } from '../adapters/factory.js';
 import type { ChainAdapter, SubmitContext } from '../adapters/types.js';
 import { appendAudit } from '../domain/audit.js';
 import { SystemClock, type Clock } from '../domain/clock.js';
@@ -26,8 +26,9 @@ import {
   type CompensationAction,
   type ErrorRecord,
   type FailureKind,
+  type PlanApproval,
   type SagaRecord,
-  type SimulatedReceipt,
+  type ProofReceipt,
   type StartSagaInput,
   type StartSagaResult,
   type StepName,
@@ -67,6 +68,10 @@ export interface SagaExecutorOptions {
   jitter?: JitterSource;
   adapterFactory?: (saga: SagaRecord) => ChainAdapter;
   hooks?: ExecutorHooks;
+  /** Present only for the gated testnet path. Never inferred. */
+  testnet?: TestnetAdapterDeps;
+  /** Explicit user approval for a specific testnet plan hash. */
+  approval?: PlanApproval;
   /** Safety guard against a bug causing an unbounded drive loop. */
   maxLoopIterations?: number;
 }
@@ -90,6 +95,8 @@ export class SagaExecutor {
   private readonly jitter: JitterSource;
   private readonly adapterFactory: (saga: SagaRecord) => ChainAdapter;
   private readonly hooks: ExecutorHooks;
+  private readonly testnet: TestnetAdapterDeps | undefined;
+  private readonly approval: PlanApproval | undefined;
   private readonly maxLoopIterations: number;
   private readonly keyedQueues = new Map<string, Promise<void>>();
 
@@ -99,7 +106,10 @@ export class SagaExecutor {
     // Deterministic by default so a resumed run computes the same retry delay.
     this.jitter = options.jitter ?? createSeededJitter('pharos-saga-executor');
     const ledger = new SimulatedLedger(this.store.ledgerPath);
-    this.adapterFactory = options.adapterFactory ?? ((saga) => createAdapter(saga, ledger));
+    this.testnet = options.testnet;
+    this.approval = options.approval;
+    this.adapterFactory =
+      options.adapterFactory ?? ((saga) => createAdapter(saga, ledger, this.testnet));
     this.hooks = options.hooks ?? {};
     this.maxLoopIterations = options.maxLoopIterations ?? 200;
   }
@@ -145,7 +155,7 @@ export class SagaExecutor {
       appendAudit(record, at, {
         type: 'SAGA_RUN_STARTED',
         message: `Executor attached in state ${record.state}. Persisting before any step.`,
-        data: { state: record.state, simulated: true },
+        data: { state: record.state, simulated: this.isSimulated(record) },
       });
       await this.persist(record, at);
 
@@ -172,6 +182,19 @@ export class SagaExecutor {
 
   private nowIso(): string {
     return this.clock.now().toISOString();
+  }
+
+  /** True only for the offline simulator. Never inferred from a receipt. */
+  private isSimulated(record: SagaRecord): boolean {
+    return record.config.adapterId === 'simulated';
+  }
+
+  private mode(record: SagaRecord): string {
+    return this.isSimulated(record) ? 'simulated' : 'on-chain testnet';
+  }
+
+  private receiptRef(receipt: ProofReceipt): string {
+    return receipt.simulated ? receipt.simulatedTxRef : receipt.txHash;
   }
 
   private async persist(record: SagaRecord, at?: string): Promise<void> {
@@ -208,7 +231,7 @@ export class SagaExecutor {
             record,
             'APPROVAL_PENDING',
             'Saga accepted. APPROVE is the only step that may start.',
-            { simulated: true },
+            { simulated: this.isSimulated(record) },
           );
           break;
         case 'APPROVED':
@@ -308,15 +331,17 @@ export class SagaExecutor {
     appendAudit(record, attemptAt, {
       type: 'STEP_ATTEMPT',
       message:
-        `Starting simulated ${step} attempt ${attempt}/${record.config.retry.maxAttempts}. ` +
-        'No on-chain transaction is possible with this adapter.',
+        `Starting ${this.mode(record)} ${step} attempt ${attempt}/${record.config.retry.maxAttempts}. ` +
+        (this.isSimulated(record)
+          ? 'No on-chain transaction is possible with this adapter.'
+          : 'This will sign and broadcast on Pharos Atlantic testnet only if the plan hash is approved.'),
       stepId: stepRecord.id,
       data: {
         step,
         attempt,
         idempotencyKey: stepRecord.idempotencyKey,
         maxAttempts: record.config.retry.maxAttempts,
-        simulated: true,
+        simulated: this.isSimulated(record),
       },
     });
     await this.persist(record, attemptAt);
@@ -327,6 +352,7 @@ export class SagaExecutor {
       stepRecord,
       attempt,
       clock: this.clock,
+      ...(this.approval ? { approval: this.approval } : {}),
     };
 
     let phase: 'BEFORE_SUBMIT' | 'SUBMITTED' = 'BEFORE_SUBMIT';
@@ -350,26 +376,27 @@ export class SagaExecutor {
       stepRecord.finishedAt = verifiedAt;
       appendAudit(record, verifiedAt, {
         type: 'RECEIPT_VERIFIED',
-        message: `${step} simulated receipt verified; dependency requirement satisfied.`,
+        message: `${step} receipt verified; dependency requirement satisfied.`,
         stepId: stepRecord.id,
         data: {
-          simulatedTxRef: verification.receipt.simulatedTxRef,
+          receiptKind: verification.receipt.receiptKind,
+          ref: this.receiptRef(verification.receipt),
           result: verification.receipt.result,
-          simulated: true,
+          simulated: verification.receipt.simulated,
         },
       });
       appendAudit(record, verifiedAt, {
         type: 'STEP_SUCCEEDED',
-        message: `${step} succeeded in the simulated adapter.`,
+        message: `${step} succeeded in the ${this.mode(record)} adapter.`,
         stepId: stepRecord.id,
-        data: { attempt, simulated: true },
+        data: { attempt, simulated: this.isSimulated(record) },
       });
 
       await this.transition(
         record,
         verifiedStateFor(step),
         `${step} verified.`,
-        { step, receiptKind: verification.receipt.receiptKind, simulated: true },
+        { step, receiptKind: verification.receipt.receiptKind, simulated: verification.receipt.simulated },
       );
     } catch (error) {
       if (error instanceof SimulatedInterruptionError) throw error;
@@ -403,7 +430,7 @@ export class SagaExecutor {
         level: 'WARN',
         message: `${step} attempt ${stepRecord.attempts} failed transiently: ${errorRecord.message}`,
         stepId: stepRecord.id,
-        data: { step, attempt: stepRecord.attempts, kind, code: errorRecord.code, simulated: true },
+        data: { step, attempt: stepRecord.attempts, kind, code: errorRecord.code, simulated: this.isSimulated(record) },
       });
 
       const retryPolicy = new RetryPolicy(record.config.retry);
@@ -438,7 +465,7 @@ export class SagaExecutor {
             rawDelayMs: schedule.rawDelayMs,
             jitter: schedule.jitter,
             scheduledAt,
-            simulated: true,
+            simulated: this.isSimulated(record),
           },
         });
         await this.transition(record, 'RETRY_WAIT', `${step} waiting for a bounded retry.`, {
@@ -476,7 +503,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: `${step} submission outcome is UNKNOWN: ${errorRecord.message}`,
         stepId: stepRecord.id,
-        data: { step, attempt: stepRecord.attempts, kind, code: errorRecord.code, simulated: true },
+        data: { step, attempt: stepRecord.attempts, kind, code: errorRecord.code, simulated: this.isSimulated(record) },
       });
       await this.persist(record, at);
       await this.reconcileStep(record, adapter, step, 'Submission outcome unknown after adapter error.');
@@ -523,7 +550,7 @@ export class SagaExecutor {
       level: 'ERROR',
       message: `${step} failed permanently: ${errorRecord.message}`,
       stepId: stepRecord.id,
-      data: { step, attempt: stepRecord.attempts, kind, code: errorRecord.code, simulated: true },
+      data: { step, attempt: stepRecord.attempts, kind, code: errorRecord.code, simulated: this.isSimulated(record) },
     });
     stepRecord.status = 'FAILED';
     stepRecord.submissionState = 'NOT_SUBMITTED';
@@ -545,7 +572,7 @@ export class SagaExecutor {
     const stepRecord = record.steps[step];
     const at = this.nowIso();
     const error = new ReceiptVerificationError(
-      `${step} simulated receipt failed verification: ${reasons.join('; ')}`,
+      `${step} receipt failed verification: ${reasons.join('; ')}`,
       reasons,
     );
     const errorRecord = toErrorRecord(error, at, stepRecord.attempts, 'VERIFICATION');
@@ -568,7 +595,7 @@ export class SagaExecutor {
       level: 'ERROR',
       message: `${step} receipt failed verification; refusing to advance or retry.`,
       stepId: stepRecord.id,
-      data: { step, reasons, simulated: true },
+      data: { step, reasons, simulated: this.isSimulated(record) },
     });
     await this.manualRecovery(record, `${step} verification failure requires manual recovery.`, {
       step,
@@ -590,11 +617,11 @@ export class SagaExecutor {
       type: 'RECONCILIATION_ATTEMPTED',
       message: `${step} outcome unknown; querying the adapter by idempotency key. No resubmission.`,
       stepId: stepRecord.id,
-      data: { step, idempotencyKey: stepRecord.idempotencyKey, reason, simulated: true },
+      data: { step, idempotencyKey: stepRecord.idempotencyKey, reason, simulated: this.isSimulated(record) },
     });
     await this.persist(record, at);
 
-    let resolved: SimulatedReceipt | null = null;
+    let resolved: ProofReceipt | null = null;
     let detail = '';
     try {
       const result = await adapter.reconcile(step, {
@@ -613,7 +640,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: `${step} reconciliation failed: ${errorRecord.message}`,
         stepId: stepRecord.id,
-        data: { step, found: false, error: errorRecord, simulated: true },
+        data: { step, found: false, error: errorRecord, simulated: this.isSimulated(record) },
       });
       await this.manualForUnknown(record, step, `${step} reconciliation failed.`);
       return;
@@ -632,13 +659,13 @@ export class SagaExecutor {
           type: 'RECONCILIATION_RESULT',
           message: `${step} reconciled successfully by idempotency key. ${detail}`,
           stepId: stepRecord.id,
-          data: { step, found: true, detail, simulatedTxRef: verification.receipt.simulatedTxRef },
+          data: { step, found: true, detail, ref: this.receiptRef(verification.receipt) },
         });
         appendAudit(record, verifiedAt, {
           type: 'RECEIPT_VERIFIED',
-          message: `${step} reconciled simulated receipt verified.`,
+          message: `${step} reconciled receipt verified.`,
           stepId: stepRecord.id,
-          data: { simulatedTxRef: verification.receipt.simulatedTxRef, reconciled: true },
+          data: { ref: this.receiptRef(verification.receipt), reconciled: true },
         });
         appendAudit(record, verifiedAt, {
           type: 'STEP_SUCCEEDED',
@@ -659,7 +686,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: `${step} reconciliation returned a receipt that failed verification.`,
         stepId: stepRecord.id,
-        data: { step, found: true, reasons: verification.reasons, simulated: true },
+        data: { step, found: true, reasons: verification.reasons, simulated: this.isSimulated(record) },
       });
       await this.manualForUnknown(record, step, `${step} reconciled receipt failed verification.`);
       return;
@@ -670,7 +697,7 @@ export class SagaExecutor {
       level: 'WARN',
       message: `${step} could not be reconciled. ${detail}`,
       stepId: stepRecord.id,
-      data: { step, found: false, detail, simulated: true },
+      data: { step, found: false, detail, simulated: this.isSimulated(record) },
     });
     await this.manualForUnknown(record, step, `${step} outcome is unknown and unreconciled.`);
   }
@@ -731,7 +758,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: 'Saga failed at APPROVE. SWAP was never attempted; no compensation required.',
         stepId: record.steps[step].id,
-        data: { step, failure, simulated: true, swapAttempted: false },
+        data: { step, failure, simulated: this.isSimulated(record), swapAttempted: false },
       });
       await this.transition(record, 'FAILED', 'APPROVE failed permanently before SWAP could start.', {
         step,
@@ -764,7 +791,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: `${step} failed and policy disables compensation. Manual recovery required.`,
         stepId: record.steps[step].id,
-        data: { step, action, simulated: true },
+        data: { step, action, simulated: this.isSimulated(record) },
       });
       await this.manualRecovery(record, `${step} failed with no compensation configured.`, {
         step,
@@ -790,7 +817,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: `Adapter does not support ${action}; manual recovery required.`,
         stepId: record.steps[step].id,
-        data: { step, action, simulated: true },
+        data: { step, action, simulated: this.isSimulated(record) },
       });
       await this.manualRecovery(record, `${step} failed and ${action} is unavailable.`, {
         step,
@@ -809,13 +836,15 @@ export class SagaExecutor {
       finishedAt: null,
       receipt: null,
       error: null,
-      note: `Configured compensation ${action} will be attempted as a separate simulated call.`,
+      note: this.isSimulated(record)
+        ? `Configured compensation ${action} will be attempted as a separate simulated call.`
+        : `Configured compensation ${action} will be attempted as a separate on-chain testnet transaction.`,
     };
     await this.transition(
       record,
       'COMPENSATING',
       `${step} failed permanently. Starting configured compensation ${action}.`,
-      { step, action, originalFailure: failure.code, simulated: true },
+      { step, action, originalFailure: failure.code, simulated: this.isSimulated(record) },
     );
   }
 
@@ -841,10 +870,12 @@ export class SagaExecutor {
     appendAudit(record, startedAt, {
       type: 'COMPENSATION_STARTED',
       message:
-        `Starting simulated compensation ${action} for the original ${originalStep} failure. ` +
-        'This is a new simulated call, not a blockchain rollback.',
+        `Starting ${this.mode(record)} compensation ${action} for the original ${originalStep} failure. ` +
+        (this.isSimulated(record)
+          ? 'This is a new simulated call, not a blockchain rollback.'
+          : 'This is a new on-chain testnet transaction, not a blockchain rollback.'),
       stepId: `${record.id}:COMPENSATION:${action}`,
-      data: { action, originalStep, simulated: true },
+      data: { action, originalStep, simulated: this.isSimulated(record) },
     });
     await this.persist(record, startedAt);
 
@@ -855,6 +886,7 @@ export class SagaExecutor {
         action,
         originalStep,
         clock: this.clock,
+        ...(this.approval ? { approval: this.approval } : {}),
       });
     } catch (error) {
       const at = this.nowIso();
@@ -868,7 +900,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: `Compensation ${action} threw: ${errorRecord.message}`,
         stepId: `${record.id}:COMPENSATION:${action}`,
-        data: { action, originalStep, error: errorRecord, simulated: true },
+        data: { action, originalStep, error: errorRecord, simulated: this.isSimulated(record) },
       });
       await this.manualRecovery(record, `Compensation ${action} failed; manual recovery required.`, {
         action,
@@ -899,9 +931,9 @@ export class SagaExecutor {
         appendAudit(record, at, {
           type: 'COMPENSATION_FAILED',
           level: 'ERROR',
-          message: 'Compensation simulated receipt failed verification.',
+          message: 'Compensation receipt failed verification.',
           stepId: `${record.id}:COMPENSATION:${action}`,
-          data: { action, originalStep, reasons: verification.reasons, simulated: true },
+          data: { action, originalStep, reasons: verification.reasons, simulated: this.isSimulated(record) },
         });
         await this.manualRecovery(record, `Compensation ${action} receipt failed verification.`, {
           action,
@@ -917,14 +949,14 @@ export class SagaExecutor {
       appendAudit(record, at, {
         type: 'COMPENSATION_SUCCEEDED',
         message:
-          `Simulated compensation ${action} succeeded. The original ${originalStep} failure is ` +
+          `Compensation ${action} succeeded. The original ${originalStep} failure is ` +
           'still recorded; nothing was rolled back.',
         stepId: `${record.id}:COMPENSATION:${action}`,
         data: {
           action,
           originalStep,
-          simulatedTxRef: verification.receipt.simulatedTxRef,
-          simulated: true,
+          ref: this.receiptRef(verification.receipt),
+          simulated: verification.receipt.simulated,
         },
       });
       appendAudit(record, at, {
@@ -934,7 +966,7 @@ export class SagaExecutor {
           `Saga failed at ${originalStep}; compensation ${action} succeeded. ` +
           'Outcome is FAILED, not COMPLETED.',
         stepId: record.steps[originalStep].id,
-        data: { originalFailure: record.failure.code, compensationStatus: 'SUCCEEDED', simulated: true },
+        data: { originalFailure: record.failure.code, compensationStatus: 'SUCCEEDED', simulated: this.isSimulated(record) },
       });
       await this.transition(record, 'FAILED', `Compensation ${action} succeeded; saga remains failed.`, {
         action,
@@ -952,7 +984,7 @@ export class SagaExecutor {
         level: 'ERROR',
         message: `Compensation ${action} is unavailable: ${result.note}`,
         stepId: `${record.id}:COMPENSATION:${action}`,
-        data: { action, originalStep, simulated: true },
+        data: { action, originalStep, simulated: this.isSimulated(record) },
       });
       await this.manualRecovery(record, `Compensation ${action} unavailable; manual recovery required.`, {
         action,
@@ -978,7 +1010,7 @@ export class SagaExecutor {
       level: 'ERROR',
       message: `Compensation ${action} failed: ${result.note}`,
       stepId: `${record.id}:COMPENSATION:${action}`,
-      data: { action, originalStep, error: errorRecord, simulated: true },
+      data: { action, originalStep, error: errorRecord, simulated: this.isSimulated(record) },
     });
     await this.manualRecovery(record, `Compensation ${action} failed; manual recovery required.`, {
       action,
@@ -1024,7 +1056,7 @@ export class SagaExecutor {
       level: 'ERROR',
       message,
       stepId: record.steps[step].id,
-      data: { ...data, simulated: true },
+      data: { ...data, simulated: this.isSimulated(record) },
     });
     if (canTransition(record.state, 'MANUAL_RECOVERY_REQUIRED')) {
       await this.transition(record, 'MANUAL_RECOVERY_REQUIRED', message, data);

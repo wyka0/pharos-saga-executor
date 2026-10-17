@@ -3,8 +3,13 @@ export type { ExecutorHooks, SagaExecutorOptions } from './executor/executor.js'
 export { SagaStore } from './persistence/store.js';
 export { SimulatedLedger } from './persistence/ledger.js';
 export { SimulatedAdapter } from './adapters/simulated.js';
+export { PharosTestnetAdapter } from './adapters/pharosTestnet.js';
 export { createAdapter } from './adapters/factory.js';
+export type { TestnetAdapterDeps } from './adapters/factory.js';
 export type { ChainAdapter } from './adapters/types.js';
+export { defaultAtlanticTestnetConfig, ATLANTIC_TESTNET, ATLANTIC_TOKENS } from './testnet/config.js';
+export type { TestnetReadiness, TransactionPlan, TokenReadiness } from './testnet/plan.js';
+export { TestnetJournal } from './persistence/testnetJournal.js';
 export { RetryPolicy, createSeededJitter } from './domain/retry.js';
 export { VirtualClock, SystemClock } from './domain/clock.js';
 export type { Clock } from './domain/clock.js';

@@ -1,9 +1,10 @@
 import type { Clock } from '../domain/clock.js';
 import type {
   CompensationAction,
+  PlanApproval,
+  ProofReceipt,
   SagaRecord,
   SettlementState,
-  SimulatedReceipt,
   StepName,
   StepRecord,
 } from '../domain/types.js';
@@ -15,6 +16,11 @@ export interface SubmitContext {
   /** 1-based submission attempt for this step (bounded by retry.maxAttempts). */
   attempt: number;
   clock: Clock;
+  /**
+   * Explicit approval for the exact plan hash. Required by the testnet adapter;
+   * ignored by the simulated adapter. Never inferred automatically.
+   */
+  approval?: PlanApproval;
 }
 
 export interface ReconcileContext {
@@ -25,7 +31,7 @@ export interface ReconcileContext {
 }
 
 export interface ReconcileResult {
-  receipt: SimulatedReceipt | null;
+  receipt: ProofReceipt | null;
   detail: string;
 }
 
@@ -34,21 +40,21 @@ export interface CompensationContext {
   action: CompensationAction;
   originalStep: StepName;
   clock: Clock;
+  approval?: PlanApproval;
 }
 
 export interface CompensationResult {
   status: SettlementState;
-  receipt: SimulatedReceipt | null;
+  receipt: ProofReceipt | null;
   note: string;
   error?: unknown;
 }
 
 /**
- * The adapter seam. The saga state machine only sees this interface, so a
- * verified Pharos testnet adapter can be added later without changing the
- * executor or the persisted state format.
+ * The adapter seam. The saga state machine only sees this interface, so the
+ * simulated and testnet adapters share the same executor and state machine.
  *
- * Requirements for a future adapter:
+ * Requirements for any adapter:
  *  - submit() must be idempotent by `stepRecord.idempotencyKey`.
  *  - a submission with an uncertain outcome must throw
  *    UnknownSubmissionOutcomeError, never a transient error.
@@ -58,7 +64,7 @@ export interface CompensationResult {
 export interface ChainAdapter {
   readonly id: string;
   readonly simulated: boolean;
-  submit(step: StepName, context: SubmitContext): Promise<SimulatedReceipt>;
+  submit(step: StepName, context: SubmitContext): Promise<ProofReceipt>;
   reconcile(step: StepName, context: ReconcileContext): Promise<ReconcileResult>;
   supportsCompensation(action: CompensationAction): boolean;
   compensate(context: CompensationContext): Promise<CompensationResult>;

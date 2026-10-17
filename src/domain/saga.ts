@@ -18,6 +18,8 @@ import {
   type StartSagaInput,
   type StepName,
   type StepRecord,
+  type TestnetConfig,
+  type TestnetToken,
 } from './types.js';
 
 const SAGA_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,79}$/;
@@ -121,12 +123,70 @@ function makeStep(sagaId: string, step: StepName): StepRecord {
   };
 }
 
+export function validateTestnetConfig(input: TestnetConfig): TestnetConfig {
+  if (input.network.chainId !== 688689 || input.network.name !== 'atlantic-testnet') {
+    throw new ConfigurationError('Only Pharos Atlantic testnet (chainId 688689) is allowed');
+  }
+  let explorerHost = '';
+  try {
+    explorerHost = new URL(input.network.explorerUrl).hostname;
+  } catch {
+    throw new ConfigurationError('Testnet explorer URL is invalid');
+  }
+  if (explorerHost !== 'atlantic.pharosscan.xyz') {
+    throw new ConfigurationError('Testnet explorer must be atlantic.pharosscan.xyz');
+  }
+  if (!/^[A-Z][A-Z0-9_]{2,60}$/.test(input.network.rpcUrlEnv)) {
+    throw new ConfigurationError('network.rpcUrlEnv must be an environment variable NAME');
+  }
+  const addressPattern = /^0x[0-9a-fA-F]{40}$/;
+  const seen = new Set<string>();
+  for (const token of input.tokens as TestnetToken[]) {
+    if (!addressPattern.test(token.address)) {
+      throw new ConfigurationError(`Invalid testnet token address for ${token.symbol}`);
+    }
+    if (!Number.isInteger(token.decimals) || token.decimals < 0 || token.decimals > 36) {
+      throw new ConfigurationError(`Invalid decimals for ${token.symbol}`);
+    }
+    if (seen.has(token.address.toLowerCase())) {
+      throw new ConfigurationError(`Duplicate testnet token address for ${token.symbol}`);
+    }
+    seen.add(token.address.toLowerCase());
+  }
+  for (const protocol of [input.swap, input.deposit]) {
+    if (protocol && !addressPattern.test(protocol.address)) {
+      throw new ConfigurationError(`Invalid testnet ${protocol.kind} protocol address`);
+    }
+  }
+  if (input.approvedPlan && !/^[a-f0-9]{64}$/.test(input.approvedPlan.planHash)) {
+    throw new ConfigurationError('approvedPlan.planHash must be a 32-byte lowercase hex digest');
+  }
+  return structuredClone(input);
+}
+
 export function buildConfig(input: StartSagaInput): SagaConfig {
+  const adapterId = input.adapterId ?? 'simulated';
+  if (adapterId === 'pharos-testnet') {
+    if (!input.testnet) {
+      throw new ConfigurationError('adapterId pharos-testnet requires a testnet configuration');
+    }
+    return {
+      adapterId,
+      retry: assertRetryConfig(input.retry ?? DEFAULT_RETRY),
+      compensationPolicy: normalizeCompensationPolicy(input.compensationPolicy),
+      scenario: null,
+      testnet: validateTestnetConfig(input.testnet),
+    };
+  }
+  if (input.testnet) {
+    throw new ConfigurationError('testnet configuration requires adapterId pharos-testnet');
+  }
   return {
     adapterId: 'simulated',
     retry: assertRetryConfig(input.retry ?? DEFAULT_RETRY),
     compensationPolicy: normalizeCompensationPolicy(input.compensationPolicy),
     scenario: normalizeScenario(input.scenario),
+    testnet: null,
   };
 }
 
@@ -167,9 +227,21 @@ export function createSagaRecord(input: StartSagaInput, clock: Clock): SagaRecor
     message: 'Saga created in CREATED state. Simulated adapter selected; no transaction path is enabled.',
     data: {
       adapterId: config.adapterId,
-      simulated: true,
-      disclaimer: SIMULATED_DISCLAIMER,
-      scenario: config.scenario.name,
+      simulated: config.adapterId === 'simulated',
+      disclaimer:
+        config.adapterId === 'simulated'
+          ? SIMULATED_DISCLAIMER
+          : 'ON-CHAIN TESTNET - Pharos Atlantic testnet (chainId 688689). Testnet funds only.',
+      scenario: config.scenario?.name ?? null,
+      testnet: config.testnet
+        ? {
+            network: config.testnet.network.name,
+            chainId: config.testnet.network.chainId,
+            swapConfigured: config.testnet.swap !== null,
+            depositConfigured: config.testnet.deposit !== null,
+            approvedPlan: config.testnet.approvedPlan?.planHash ?? null,
+          }
+        : null,
       retry: config.retry,
       compensationPolicy: config.compensationPolicy,
       clientRequestId,

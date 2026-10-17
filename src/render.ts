@@ -1,7 +1,15 @@
-import type { AuditEvent, SagaRecord } from './domain/types.js';
+import type { AuditEvent, ProofReceipt, SagaRecord } from './domain/types.js';
 
-const DISCLAIMER =
+const SIMULATED_DISCLAIMER =
   'SIMULATED ADAPTER - NO WALLET, RPC, SIGNATURE, BROADCAST OR ON-CHAIN TRANSACTION WAS USED.';
+const TESTNET_DISCLAIMER =
+  'REAL PHAROS ATLANTIC TESTNET (chainId 688689) - TESTNET FUNDS ONLY. NOT MAINNET.';
+
+function receiptLabel(receipt: ProofReceipt): string {
+  return receipt.simulated
+    ? `receipt=${receipt.simulatedTxRef} (SIMULATED)`
+    : `tx=${receipt.txHash} block=${receipt.blockNumber} (ATLANTIC TESTNET)`;
+}
 
 function line(char = '='): string {
   return char.repeat(78);
@@ -28,9 +36,7 @@ export function formatAuditLog(record: SagaRecord): string {
 
 function stepLine(record: SagaRecord, step: keyof SagaRecord['steps']): string {
   const value = record.steps[step];
-  const receipt = value.receipt
-    ? `receipt=${value.receipt.simulatedTxRef} (SIMULATED)`
-    : 'receipt=none';
+  const receipt = value.receipt ? receiptLabel(value.receipt) : 'receipt=none';
   const retry = value.retry
     ? ` last-retry=${value.retry.delayMs}ms@${value.retry.scheduledAt}`
     : '';
@@ -45,7 +51,9 @@ export function formatSaga(record: SagaRecord): string {
   const lines: string[] = [];
   lines.push(line());
   lines.push(`SAGA ${record.id}`);
-  lines.push(DISCLAIMER);
+  lines.push(
+    record.config.adapterId === 'simulated' ? SIMULATED_DISCLAIMER : TESTNET_DISCLAIMER,
+  );
   lines.push(line());
   lines.push(`State:       ${record.state}`);
   lines.push(`Created:     ${record.createdAt}`);
@@ -53,7 +61,7 @@ export function formatSaga(record: SagaRecord): string {
   lines.push(`Completed:   ${record.completedAt ?? '-'}`);
   lines.push(`Revision:    ${record.revision}`);
   lines.push(`Adapter:     ${record.config.adapterId} (simulated=${record.config.adapterId === 'simulated'})`);
-  lines.push(`Scenario:    ${record.config.scenario.name}`);
+  lines.push(`Scenario:    ${record.config.scenario?.name ?? 'n/a (testnet, no fault injection)'}`);
   lines.push(
     `Request:     ${record.request.amountIn} ${record.request.fromToken} -> ` +
       `${record.request.toToken} -> deposit ${record.request.depositToken}`,
@@ -72,8 +80,9 @@ export function formatSaga(record: SagaRecord): string {
       `deposit=${record.config.compensationPolicy.onDepositFailure}`,
   );
   lines.push(
-    'Evidence:    SIMULATED receipts only; no transaction hash, no explorer link, ' +
-      'no on-chain confirmation.',
+    record.config.adapterId === 'simulated'
+      ? 'Evidence:    SIMULATED receipts only; no transaction hash, no explorer link, no on-chain confirmation.'
+      : 'Evidence:    real Atlantic testnet receipts with transaction hashes and explorer links.',
   );
   lines.push('');
   lines.push('STEPS (stable IDs and idempotency keys)');
@@ -107,7 +116,7 @@ export function formatSaga(record: SagaRecord): string {
     lines.push(`  note=${record.compensation.note}`);
     if (record.compensation.receipt) {
       lines.push(
-        `  simulatedReceipt=${record.compensation.receipt.simulatedTxRef} (SIMULATED, not a rollback)`,
+        `  compensationReceipt=${receiptLabel(record.compensation.receipt)} (NOT a rollback)`,
       );
     }
     if (record.compensation.error) {
@@ -118,7 +127,11 @@ export function formatSaga(record: SagaRecord): string {
   lines.push('');
   lines.push(formatAuditLog(record));
   lines.push(line());
-  lines.push('Reminder: simulated receipts are NOT live blockchain evidence.');
+  lines.push(
+    record.config.adapterId === 'simulated'
+      ? 'Reminder: simulated receipts are NOT live blockchain evidence.'
+      : 'Reminder: TESTNET ONLY. Never treat this as mainnet evidence or real-fund activity.',
+  );
   lines.push(line());
   return `${lines.join('\n')}\n`;
 }
@@ -138,7 +151,7 @@ export function formatSagaList(records: SagaRecord[]): string {
     '-'.repeat(110),
     ...records.map(formatSagaSummary),
     '',
-    `${records.length} saga(s). All runs use the simulated adapter.`,
+    `${records.length} saga(s).`,
   ];
   return `${lines.join('\n')}\n`;
 }

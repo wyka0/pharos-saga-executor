@@ -1,6 +1,6 @@
 {
   "name": "pharos-saga-executor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Deterministic, resumable APPROVE -> SWAP -> DEPOSIT saga executor for Pharos (simulated adapter, no real transactions).",
@@ -15,12 +15,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test test/state-machine.test.ts test/executor-success.test.ts test/retry.test.ts test/failure.test.ts test/persistence.test.ts test/audit.test.ts test/cli.test.ts test/safety.test.ts",
+    "test": "node --import tsx --test test/state-machine.test.ts test/executor-success.test.ts test/retry.test.ts test/failure.test.ts test/persistence.test.ts test/audit.test.ts test/cli.test.ts test/safety.test.ts test/testnet.test.ts",
     "demo:success": "tsx scripts/demo-success.ts",
     "demo:failure": "tsx scripts/demo-failure.ts",
     "demo:manual": "tsx scripts/demo-manual-recovery.ts",
     "demo:unknown": "tsx scripts/demo-unknown-outcome.ts",
     "cli": "tsx src/cli.ts",
+    "testnet:readiness": "tsx src/cli.ts testnet:readiness",
+    "testnet:plan": "tsx src/cli.ts testnet:plan",
+    "testnet:run": "tsx src/cli.ts testnet:run",
     "check:safety": "node scripts/check-safety.mjs",
     "verify": "npm run build && npm run test && npm run check:safety"
   },
@@ -28,5 +31,8 @@
     "@types/node": "^24.10.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "viem": "^2.57.7"
   }
 }

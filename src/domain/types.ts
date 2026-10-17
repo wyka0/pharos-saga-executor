@@ -112,11 +112,55 @@ export interface AdapterScenario {
   };
 }
 
+export interface TestnetToken {
+  symbol: string;
+  address: string;
+  decimals: number;
+  /** Human-readable provenance, e.g. docs.pharos.xyz/getting-started/token-registry. */
+  verifiedSource: string;
+}
+
+export interface TestnetProtocol {
+  name: string;
+  address: string;
+  kind: 'swap' | 'deposit';
+  verifiedSource: string;
+}
+
+export interface TestnetNetworkConfig {
+  name: 'atlantic-testnet';
+  chainId: 688689;
+  nativeSymbol: 'PHRS';
+  explorerUrl: string;
+  /** Name of the env var holding the RPC URL. Never the URL itself (it may contain a key). */
+  rpcUrlEnv: string;
+}
+
+export interface PlanApproval {
+  planHash: string;
+  approvedAt: string;
+  approvedBy: string;
+}
+
+/**
+ * Testnet configuration. It contains no secret material: only public addresses,
+ * a documentation provenance string, the NAME of an RPC env var, and an
+ * optional approval record for a specific plan hash.
+ */
+export interface TestnetConfig {
+  network: TestnetNetworkConfig;
+  tokens: TestnetToken[];
+  swap: TestnetProtocol | null;
+  deposit: TestnetProtocol | null;
+  approvedPlan: PlanApproval | null;
+}
+
 export interface SagaConfig {
-  adapterId: 'simulated';
+  adapterId: 'simulated' | 'pharos-testnet';
   retry: RetryConfig;
   compensationPolicy: CompensationPolicy;
-  scenario: AdapterScenario;
+  scenario: AdapterScenario | null;
+  testnet: TestnetConfig | null;
 }
 
 export interface ErrorRecord {
@@ -175,6 +219,42 @@ export interface SimulatedReceipt {
   compensatesStep?: StepName;
 }
 
+export interface OnChainPostcondition {
+  name: string;
+  expected: string;
+  observed: string;
+}
+
+/** A real testnet receipt. Distinct type from SimulatedReceipt by construction. */
+export interface OnChainReceipt {
+  receiptVersion: 1;
+  receiptKind: 'STEP' | 'COMPENSATION';
+  simulated: false;
+  network: 'atlantic-testnet';
+  chainId: 688689;
+  disclaimer: string;
+  txHash: string;
+  blockNumber: string;
+  blockHash: string;
+  status: 'SUCCESS';
+  confirmations: number;
+  from: string;
+  to: string;
+  explorerUrl: string;
+  sagaId: string;
+  stepId: string;
+  idempotencyKey: string;
+  operation: ReceiptOperation;
+  issuedAt: string;
+  result: ReceiptResult;
+  gasUsed: string;
+  effectiveGasPrice: string;
+  postconditions: OnChainPostcondition[];
+  compensatesStep?: StepName;
+}
+
+export type ProofReceipt = SimulatedReceipt | OnChainReceipt;
+
 export interface StepRecord {
   /** Stable identifier: `<sagaId>:<STEP>`. */
   id: string;
@@ -188,7 +268,7 @@ export interface StepRecord {
   startedAt: string | null;
   finishedAt: string | null;
   verifiedAt: string | null;
-  receipt: SimulatedReceipt | null;
+  receipt: ProofReceipt | null;
   /** Evidence of a receipt that failed verification. Treated as untrusted. */
   invalidReceiptEvidence: unknown | null;
   errors: ErrorRecord[];
@@ -212,7 +292,7 @@ export interface CompensationRecord {
   attempts: number;
   startedAt: string | null;
   finishedAt: string | null;
-  receipt: SimulatedReceipt | null;
+  receipt: ProofReceipt | null;
   error: ErrorRecord | null;
   note: string;
 }
@@ -276,9 +356,11 @@ export interface StartSagaInput {
   sagaId?: string;
   clientRequestId?: string;
   request: SagaRequest;
+  adapterId?: 'simulated' | 'pharos-testnet';
   retry?: Partial<RetryConfig>;
   compensationPolicy?: Partial<CompensationPolicy>;
   scenario?: AdapterScenario;
+  testnet?: TestnetConfig;
   /** Defaults to true. Set false to persist CREATED and inspect before running. */
   autoRun?: boolean;
 }
