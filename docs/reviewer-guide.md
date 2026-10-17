@@ -148,6 +148,10 @@ endpoint; installation is local via the `skills` CLI. See
 
 ## 5. Requirement map
 
+The full requirement-by-requirement matrix — implementation file + function,
+test names, demo command and saved evidence file for each of the five Arena
+requirements — is [`requirements-matrix.md`](requirements-matrix.md).
+
 | Requirement | Evidence |
 | --- | --- |
 | Three dependent receipt-verified steps | success demo + `test/executor-success.test.ts` |
@@ -193,7 +197,7 @@ recorded in
 | Code and tests | complete locally |
 | Simulation demos | all four PASS |
 | Skill packaging | validated; 1 skill discovered |
-| GitHub repo | **not published** (`api.github.com/repos/wyka0/pharos-saga-executor` → 404) |
+| GitHub repo | **published** — `https://github.com/wyka0/pharos-saga-executor` (main @ `b3fc8cafe9b795d0b745f130f0f32c9d30316bcd`, pushed 2026-10-18) |
 | Live on-chain saga | **executed on Pharos Atlantic Testnet (chainId 688689)** - all five transactions confirmed; test-only contracts; see `verified-output.md` section 14 |
 | Test-only local chain validation | added and passing (chainId 31337, clearly labelled mocks) |
 | Foundry toolchain | available in WSL Ubuntu (1.2.3-stable), documented in `docs/local-anvil.md` |
@@ -201,12 +205,14 @@ recorded in
 | Gated deployment tooling | implemented and locally tested (6/6 scenarios); **executed against Atlantic** (deployment above) |
 | Gated saga tooling | implemented and locally tested (8 scenarios, 81 checks); **executed against Atlantic** (5/5 CONFIRMED) |
 | Video | optional, not produced |
-| Agent Arena submission | not submitted |
+| Agent Arena submission | **not submitted** — submission requires GitHub sign-in on the task page; no public submission record exists |
 
 ## 8. Remaining blockers
 
-1. **GitHub publication** is required for the repository link. The local remote
-   is configured but nothing has been pushed.
+1. **Agent Arena submission is not yet made.** Submission requires signing in
+   with GitHub on the task page
+   (`https://pharos-agent-arena.vercel.app/tasks/saga-executor`); the repository
+   link is ready: `https://github.com/wyka0/pharos-saga-executor`.
 2. **No officially documented Atlantic protocol exists.** No Atlantic
    router/vault is listed by Pharos, so the official-protocol adapter plan
    remains blocked at the spender check and no protocol proof link exists; no
@@ -223,6 +229,7 @@ recorded in
    were explicitly approved and executed through their gated runners.)
 4. Optional +50 video is not produced.
 
-No mainnet deployment, push or Agent Arena submission was performed; the only
-on-chain activity is the test-only Atlantic execution recorded in
+No mainnet deployment or Agent Arena submission was performed; the repository is
+published on GitHub (main @ `b3fc8cafe9b795d0b745f130f0f32c9d30316bcd`), and the
+only on-chain activity is the test-only Atlantic execution recorded in
 [`verified-output.md` section 14](verified-output.md#iteration-7--atlantic-saga-execution).

@@ -21,7 +21,9 @@ Adapter: **simulated** (iteration 1) plus a **gated Atlantic testnet adapter** (
 > tooling records); **section 14 records the gated Atlantic testnet saga run
 > that was explicitly approved and executed** - five confirmed transactions on
 > chainId 688689 against the test-only mock contracts. No mainnet transaction
-> was ever sent.
+> was ever sent. **Section 15 (2026-10-18) re-verifies every Task 5 requirement
+> against the committed implementation and links the evidence matrix**
+> ([`requirements-matrix.md`](requirements-matrix.md)).
 >
 > The **test-only deployment** those contracts come from was itself explicitly
 > approved and executed on 2026-10-17 (deployment plan hash
@@ -1354,3 +1356,44 @@ chains only (chainId 31337/5, loopback): scenario A repeated the full happy
 path locally (5 confirmed local transactions, identical end-state battery),
 A2 re-proved the skip and never-resend semantics, and B/C/D/E/F/G re-proved
 every refusal and stop path.
+
+---
+
+# Iteration 8 — Task 5 requirements completion
+
+Date: **2026-10-18**. Scope: re-verify every Task 5 requirement against the
+committed implementation, re-run all demonstrations, and publish the
+requirement-by-requirement evidence matrix
+([`requirements-matrix.md`](requirements-matrix.md)). Documentation only — no
+source, contract, plan or journal file was modified for this record.
+
+## 15.1 Commands and results (all executed 2026-10-18)
+
+```text
+npm run verify:              build exit 0; 103 tests, 103 pass, 0 fail, 0 skipped; SAFETY GATE PASSED; exit code 0
+forge test -vv:              16 tests passed, 0 failed, 0 skipped (3 suites)
+npm run demo:saga-tooling:   LOCAL SAGA TOOLING CHECK PASSED - 81 checks, 8 scenarios
+npm run demo:success:        exit 0 - FINAL STATE: COMPLETED; steps approve=SUCCEEDED/1 swap=SUCCEEDED/1 deposit=SUCCEEDED/1; 17 audit events
+npm run demo:failure:        exit 0 - FINAL STATE: FAILED; DEPOSIT FAILED/3 with two visible retries (75 ms, 150 ms);
+                             COMPENSATION: SIMULATED_UNWIND_SWAP -> SUCCEEDED; 30 audit events
+npm run demo:manual:         exit 0 - FINAL STATE: MANUAL_RECOVERY_REQUIRED; COMPENSATION: REVOKE_APPROVAL -> FAILED (recorded separately); 15 audit events
+npm run demo:unknown:        exit 0 - FINAL STATE: MANUAL_RECOVERY_REQUIRED; reconcile-once by idempotency key, no resubmission; 14 audit events
+npm run demo:local:          exit 0 - LOCAL ANVIL DEMO RESULT: PASS; 4/4 scenarios (real local transactions, chainId 31337)
+npm run demo:deploy-tooling: exit 0 - LOCAL DEPLOY TOOLING CHECK: 6/6 scenarios PASS
+```
+
+Demo audit timestamps are the deterministic virtual clock
+(`2026-01-01T00:00:00Z`); the runs themselves were executed on 2026-10-18.
+
+## 15.2 Requirement status
+
+| # | Arena requirement | Status |
+| --- | --- | --- |
+| 1 | At least 3 dependent steps, each receipt-verified before the next starts | **PASS** |
+| 2 | Explicit retry policy (classified errors, bounded attempts, no blind resend of unknown outcomes) | **PASS** (gas-price escalation intentionally not supported: fixed gas price + hard worst-case ceiling, documented) |
+| 3 | Compensation/rollback path with a demo; simulated rollback clearly distinguished from a compensating transaction | **PASS** (simulated demos + real on-chain Anvil compensation; Atlantic compensation not exercised - no failure was injected in the approved run) |
+| 4 | Durable state log recording saga id, plan hash, steps, attempts, receipts, retries, compensation and final state; survives restart | **PASS** |
+| 5 | Two reproducible demonstrations (success + forced failure) with saved outputs | **PASS** |
+
+The full matrix (implementation functions, test names, demo commands, evidence
+files) is [`requirements-matrix.md`](requirements-matrix.md).

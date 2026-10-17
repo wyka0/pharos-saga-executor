@@ -113,7 +113,10 @@ npm run testnet:deploy-plan -- --env-file C:\temp-secrets\.env --address 0xE2B86
 ```
 
 The full reviewer checklist, expected states, audit markers, and submission
-blockers are in [`docs/reviewer-guide.md`](docs/reviewer-guide.md).
+blockers are in [`docs/reviewer-guide.md`](docs/reviewer-guide.md). The
+requirement-by-requirement evidence matrix (implementation functions, test
+names, demo commands, evidence files) is in
+[`docs/requirements-matrix.md`](docs/requirements-matrix.md).
 
 ## Why this design
 
@@ -130,6 +133,9 @@ project therefore implements **honest compensation**, never a fake rollback:
   reconciled by idempotency key, then escalated if it cannot be proven.
 
 ## Rubric coverage
+
+A full requirement-by-requirement matrix (implementation, tests, demos,
+evidence) is in [`docs/requirements-matrix.md`](docs/requirements-matrix.md).
 
 | Requirement | Implementation | Evidence |
 | --- | --- | --- |
