@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test test/state-machine.test.ts test/executor-success.test.ts test/retry.test.ts test/failure.test.ts test/persistence.test.ts test/audit.test.ts test/cli.test.ts test/safety.test.ts test/testnet.test.ts test/local-anvil.test.ts test/deploy-tooling.test.ts test/saga-tooling.test.ts",
+    "test": "node --import tsx --test test/state-machine.test.ts test/executor-success.test.ts test/retry.test.ts test/failure.test.ts test/persistence.test.ts test/audit.test.ts test/cli.test.ts test/safety.test.ts test/testnet.test.ts test/local-anvil.test.ts test/deploy-tooling.test.ts test/saga-tooling.test.ts test/rpc-deprecation.test.ts",
     "demo:success": "tsx scripts/demo-success.ts",
     "demo:failure": "tsx scripts/demo-failure.ts",
     "demo:manual": "tsx scripts/demo-manual-recovery.ts",

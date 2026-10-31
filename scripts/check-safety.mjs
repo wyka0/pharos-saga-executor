@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeprecationTestFile, scanText as scanTextForDeprecation } from './check-rpc-methods.mjs';
 
 const ROOT = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 let failures = 0;
@@ -353,6 +354,35 @@ if (existsSync(path.join(ROOT, '.git'))) {
   if (bad.length > 0) console.error(`      tracked offenders: ${bad.join(', ')}`);
 } else {
   pass('git repository not initialised yet; tracked-file check deferred');
+}
+
+// Deprecated public trace RPC methods must stay out of first-party code
+// (disabled on https://rpc.pharos.xyz and https://testnet.dplabs-internal.com
+// per the official Pharos deprecation notice). Only the guard module itself
+// (its detection list) and the dedicated deprecation test suite are exempt;
+// no other file may opt out, by path or by inline comment marker.
+const rpcDeprecationFiles = [
+  ...walk(path.join(ROOT, 'src')),
+  ...walk(path.join(ROOT, 'scripts')),
+  ...walk(path.join(ROOT, 'test')),
+].filter(
+  (file) => {
+    const relative = path.relative(ROOT, file).split(path.sep).join('/');
+    return (file.endsWith('.ts') || file.endsWith('.mjs')) &&
+      !isDeprecationTestFile(relative) &&
+      path.resolve(file) !== path.resolve(path.join(ROOT, 'scripts', 'check-rpc-methods.mjs'));
+  },
+);
+let rpcDeprecationHits = 0;
+for (const file of rpcDeprecationFiles) {
+  const text = readFileSync(file, 'utf8');
+  for (const finding of scanTextForDeprecation(text)) {
+    rpcDeprecationHits += 1;
+    fail(`${path.relative(ROOT, file)}:${finding.line}:${finding.column} deprecated public RPC trace method ${finding.method} -> ${finding.snippet}`);
+  }
+}
+if (rpcDeprecationHits === 0) {
+  pass(`${rpcDeprecationFiles.length} first-party files are free of deprecated public RPC trace methods`);
 }
 
 if (failures > 0) {
